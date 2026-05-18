@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -6,6 +13,7 @@ type Tab = 'blackjack' | 'slots' | 'shop' | 'empire';
 type GameStatus = 'betting' | 'player-turn' | 'dealer-turn' | 'resolved';
 type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
 type Suit = '♠' | '♥' | '♦' | '♣';
+type UpgradeKey = 'hustler' | 'lens' | 'ownership';
 
 interface Card {
   rank: Rank;
@@ -29,12 +37,17 @@ interface SlotsState {
   slotResultMessage: string;
 }
 
-type UpgradeKey = 'hustler' | 'lens' | 'ownership';
-
 interface UpgradesBought {
   hustler: number;
   lens: number;
   ownership: number;
+}
+
+interface StageAccent {
+  glow: string;
+  ring: string;
+  label: string;
+  navGlow: string;
 }
 
 interface StageConfig {
@@ -43,22 +56,8 @@ interface StageConfig {
   unlockCost: number;
   minBet: number;
   symbols: [string, string, string];
-  theme: {
-    bg: string;
-    panel: string;
-    accent: string;
-    text: string;
-    border: string;
-    glow: string;
-    nav: string;
-    navActive: string;
-    gradient: string;
-  };
-  shopNames: {
-    hustler: string;
-    lens: string;
-    ownership: string;
-  };
+  accent: StageAccent;
+  shopNames: { hustler: string; lens: string; ownership: string };
 }
 
 interface FloatMessage {
@@ -81,16 +80,11 @@ const STAGES: StageConfig[] = [
     unlockCost: 0,
     minBet: 5,
     symbols: ['❌', '💰', '🪙'],
-    theme: {
-      bg: 'bg-zinc-900',
-      panel: 'bg-zinc-800/90 border-zinc-600',
-      accent: 'text-amber-600',
-      text: 'text-zinc-100',
-      border: 'border-zinc-500',
-      glow: 'shadow-[0_0_20px_rgba(113,63,18,0.5)]',
-      nav: 'bg-zinc-950 border-zinc-700',
-      navActive: 'bg-amber-900/60 text-amber-400 border-amber-700',
-      gradient: 'from-zinc-800 via-zinc-900 to-stone-950',
+    accent: {
+      glow: 'shadow-[0_0_32px_rgba(212,175,55,0.12)]',
+      ring: 'ring-gold/20',
+      label: 'text-zinc-400',
+      navGlow: 'shadow-[inset_0_0_20px_rgba(212,175,55,0.15)]',
     },
     shopNames: {
       hustler: 'Street Hustler',
@@ -104,16 +98,11 @@ const STAGES: StageConfig[] = [
     unlockCost: 2500,
     minBet: 50,
     symbols: ['🦩', '🍒', '💵'],
-    theme: {
-      bg: 'bg-indigo-950',
-      panel: 'bg-indigo-900/80 border-purple-500/50',
-      accent: 'text-fuchsia-400',
-      text: 'text-indigo-50',
-      border: 'border-purple-400',
-      glow: 'shadow-[0_0_30px_rgba(168,85,247,0.7)] animate-pulse-glow',
-      nav: 'bg-indigo-950 border-purple-800',
-      navActive: 'bg-purple-900/70 text-fuchsia-300 border-fuchsia-500',
-      gradient: 'from-indigo-950 via-purple-950 to-indigo-900',
+    accent: {
+      glow: 'shadow-[0_0_40px_rgba(139,92,246,0.18)]',
+      ring: 'ring-violet-500/25',
+      label: 'text-violet-300/80',
+      navGlow: 'shadow-[inset_0_0_24px_rgba(139,92,246,0.2)]',
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
@@ -127,16 +116,11 @@ const STAGES: StageConfig[] = [
     unlockCost: 25000,
     minBet: 500,
     symbols: ['🎲', '💎', '👑'],
-    theme: {
-      bg: 'bg-emerald-950',
-      panel: 'bg-emerald-900/70 border-amber-700/60',
-      accent: 'text-amber-400',
-      text: 'text-emerald-50',
-      border: 'border-amber-600/70',
-      glow: 'shadow-[0_0_25px_rgba(180,83,9,0.5)]',
-      nav: 'bg-emerald-950 border-amber-900',
-      navActive: 'bg-emerald-800/80 text-amber-300 border-amber-500',
-      gradient: 'from-emerald-950 via-emerald-900 to-stone-900',
+    accent: {
+      glow: 'shadow-[0_0_36px_rgba(13,79,60,0.35)]',
+      ring: 'ring-emerald-500/30',
+      label: 'text-emerald-300/80',
+      navGlow: 'shadow-[inset_0_0_24px_rgba(13,79,60,0.35)]',
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
@@ -150,16 +134,11 @@ const STAGES: StageConfig[] = [
     unlockCost: 250000,
     minBet: 5000,
     symbols: ['🃏', '🦚', '🎰'],
-    theme: {
-      bg: 'bg-black',
-      panel: 'bg-zinc-900/90 border-yellow-500/40',
-      accent: 'text-yellow-400',
-      text: 'text-yellow-50',
-      border: 'border-yellow-500/50',
-      glow: 'shadow-[0_0_35px_rgba(234,179,8,0.6)]',
-      nav: 'bg-black border-yellow-700/50',
-      navActive: 'bg-yellow-900/30 text-yellow-300 border-yellow-500',
-      gradient: 'from-black via-zinc-950 to-amber-950',
+    accent: {
+      glow: 'shadow-[0_0_50px_rgba(212,175,55,0.45)] animate-pulse-gold',
+      ring: 'ring-gold/50',
+      label: 'text-gold-light',
+      navGlow: 'shadow-[inset_0_0_30px_rgba(212,175,55,0.35)]',
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
@@ -175,17 +154,13 @@ const UPGRADE_BASE = {
   ownership: { cost: 2500, income: 15 },
 };
 
-// ─── Audio (Web Audio API) ─────────────────────────────────────────────────────
+// ─── Audio ─────────────────────────────────────────────────────────────────────
 
 let audioCtx: AudioContext | null = null;
 
 function getAudio(): AudioContext {
-  if (!audioCtx) {
-    audioCtx = new AudioContext();
-  }
-  if (audioCtx.state === 'suspended') {
-    void audioCtx.resume();
-  }
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') void audioCtx.resume();
   return audioCtx;
 }
 
@@ -193,15 +168,15 @@ function playCardDeal(): void {
   const ctx = getAudio();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = 'square';
-  osc.frequency.setValueAtTime(180, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.08);
-  gain.gain.setValueAtTime(0.12, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(200, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(480, ctx.currentTime + 0.07);
+  gain.gain.setValueAtTime(0.1, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.1);
+  osc.stop(ctx.currentTime + 0.09);
 }
 
 function playSlotClick(): void {
@@ -209,31 +184,30 @@ function playSlotClick(): void {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = 'triangle';
-  osc.frequency.setValueAtTime(800 + Math.random() * 200, ctx.currentTime);
-  gain.gain.setValueAtTime(0.06, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+  osc.frequency.setValueAtTime(720 + Math.random() * 180, ctx.currentTime);
+  gain.gain.setValueAtTime(0.05, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.04);
+  osc.stop(ctx.currentTime + 0.035);
 }
 
 function playWinChime(): void {
   const ctx = getAudio();
-  const notes = [523.25, 659.25, 783.99, 1046.5];
-  notes.forEach((freq, i) => {
+  [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    const t = ctx.currentTime + i * 0.1;
+    const t = ctx.currentTime + i * 0.09;
     osc.frequency.setValueAtTime(freq, t);
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.15, t + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.35);
+    osc.stop(t + 0.32);
   });
 }
 
@@ -243,29 +217,26 @@ function playLossBuzz(): void {
   const gain = ctx.createGain();
   const filter = ctx.createBiquadFilter();
   osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(220, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.4);
+  osc.frequency.setValueAtTime(200, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(55, ctx.currentTime + 0.38);
   filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(400, ctx.currentTime);
-  filter.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.4);
-  gain.gain.setValueAtTime(0.18, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+  filter.frequency.linearRampToValueAtTime(70, ctx.currentTime + 0.38);
+  gain.gain.setValueAtTime(0.14, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42);
   osc.connect(filter);
   filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.45);
+  osc.stop(ctx.currentTime + 0.42);
 }
 
-// ─── Card utilities ────────────────────────────────────────────────────────────
+// ─── Card logic ────────────────────────────────────────────────────────────────
 
 function createShoe(): Card[] {
   const deck: Card[] = [];
   for (let d = 0; d < DECK_COUNT; d++) {
     for (const suit of SUITS) {
-      for (const rank of RANKS) {
-        deck.push({ rank, suit });
-      }
+      for (const rank of RANKS) deck.push({ rank, suit });
     }
   }
   return shuffle(deck);
@@ -282,9 +253,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 function drawCard(deck: Card[]): { card: Card; deck: Card[] } {
   let d = deck;
-  if (d.length < 15) {
-    d = createShoe();
-  }
+  if (d.length < 15) d = createShoe();
   const [card, ...rest] = d;
   return { card, deck: rest };
 }
@@ -306,9 +275,11 @@ function handValue(cards: Card[]): { total: number; isSoft: boolean; isBlackjack
     total -= 10;
     aces--;
   }
-  const isSoft = aces > 0 && total <= 21;
-  const isBlackjack = cards.length === 2 && total === 21;
-  return { total, isSoft, isBlackjack };
+  return {
+    total,
+    isSoft: aces > 0 && total <= 21,
+    isBlackjack: cards.length === 2 && total === 21,
+  };
 }
 
 function isHighCard(card: Card): boolean {
@@ -317,16 +288,11 @@ function isHighCard(card: Card): boolean {
 
 function highCardPercent(deck: Card[]): number {
   if (deck.length === 0) return 0;
-  const high = deck.filter(isHighCard).length;
-  return Math.round((high / deck.length) * 1000) / 10;
-}
-
-function cardLabel(card: Card): string {
-  return `${card.rank}${card.suit}`;
+  return Math.round((deck.filter(isHighCard).length / deck.length) * 1000) / 10;
 }
 
 function cardColor(card: Card): string {
-  return card.suit === '♥' || card.suit === '♦' ? 'text-red-500' : 'text-white';
+  return card.suit === '♥' || card.suit === '♦' ? 'text-red-400' : 'text-zinc-100';
 }
 
 function formatMoney(n: number): string {
@@ -354,7 +320,7 @@ function initialBlackjack(): BlackjackState {
     dealerHand: [],
     deck: createShoe(),
     gameStatus: 'betting',
-    resultMessage: 'Place your bet to deal.',
+    resultMessage: 'Place your wager to receive cards.',
     activeBet: 0,
     doubled: false,
     dealerHoleHidden: true,
@@ -363,10 +329,154 @@ function initialBlackjack(): BlackjackState {
 
 function initialSlots(symbols: [string, string, string]): SlotsState {
   return {
-    reels: [...symbols] as [string, string, string],
+    reels: [...symbols],
     isSpinning: false,
-    slotResultMessage: 'Set your bet and spin!',
+    slotResultMessage: 'Adjust wager and initiate spin sequence.',
   };
+}
+
+// ─── UI primitives ─────────────────────────────────────────────────────────────
+
+function GlassPanel({
+  children,
+  className = '',
+  glow = '',
+}: {
+  children: ReactNode;
+  className?: string;
+  glow?: string;
+}) {
+  return (
+    <div className={`glass-panel ${glow} ${className}`}>{children}</div>
+  );
+}
+
+function GoldButton({
+  children,
+  onClick,
+  disabled = false,
+  variant = 'primary',
+  className = '',
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  variant?: 'primary' | 'secondary' | 'danger' | 'felt';
+  className?: string;
+}) {
+  const inner =
+    variant === 'felt'
+      ? 'bg-gradient-to-br from-felt-dark via-felt to-felt-light text-gold-light'
+      : variant === 'danger'
+        ? 'bg-gradient-to-br from-red-950/90 to-midnight/95 text-red-300'
+        : variant === 'secondary'
+          ? 'bg-midnight/90 text-gold-light/90'
+          : 'bg-gradient-to-br from-zinc-900 via-midnight to-black text-gold-light';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`gold-border w-full btn-premium disabled:opacity-35 disabled:pointer-events-none ${className}`}
+    >
+      <span
+        className={`gold-border-inner block w-full px-4 py-3 text-center text-sm font-semibold tracking-wide ${inner}`}
+      >
+        {children}
+      </span>
+    </button>
+  );
+}
+
+function PlayingCard({
+  card,
+  hidden = false,
+}: {
+  card?: Card;
+  hidden?: boolean;
+}) {
+  if (hidden) {
+    return (
+      <div className="w-11 h-[3.6rem] rounded-lg border border-gold/30 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-lg">
+        <div className="w-7 h-9 rounded border border-gold/20 bg-gradient-to-br from-gold-dark to-gold/40 opacity-60" />
+      </div>
+    );
+  }
+  if (!card) return null;
+  return (
+    <div className="w-11 h-[3.6rem] rounded-lg border border-white/20 bg-gradient-to-b from-zinc-100 to-zinc-300 flex flex-col items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+      <span className={`text-xs font-bold leading-none ${cardColor(card)}`}>{card.rank}</span>
+      <span className={`text-sm leading-none ${cardColor(card)}`}>{card.suit}</span>
+    </div>
+  );
+}
+
+function SlotCabinet({
+  reels,
+  spinning,
+}: {
+  reels: [string, string, string];
+  spinning: boolean;
+}) {
+  return (
+    <div className="relative mx-auto max-w-[280px]">
+      <div className="absolute -inset-1 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
+      <div className="relative rounded-2xl border-2 border-gold/40 bg-gradient-to-b from-zinc-800 via-zinc-900 to-black p-3 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="flex items-center justify-between px-1 mb-2">
+          <span className="text-[9px] font-bold tracking-[0.25em] text-gold/70 uppercase">
+            VIP Series
+          </span>
+          <div className="flex gap-1">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full ${spinning ? 'bg-gold animate-pulse' : 'bg-gold/30'}`}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-700 bg-black p-2 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
+          <div className="flex gap-1.5 justify-center">
+            {reels.map((sym, i) => (
+              <div
+                key={i}
+                className={`relative flex-1 max-w-[72px] aspect-[3/4] rounded-md overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)] ${
+                  spinning ? 'animate-reel-blur' : ''
+                }`}
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
+                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/8 to-transparent z-10 pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
+                <div
+                  className={`absolute inset-x-0 h-[2px] bg-gold/20 z-20 ${spinning ? 'animate-scanline' : 'top-1/2 -translate-y-1/2'}`}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span
+                    className={`text-3xl select-none drop-shadow-[0_0_8px_rgba(212,175,55,0.3)] ${
+                      spinning ? 'scale-110' : ''
+                    } transition-transform`}
+                  >
+                    {sym}
+                  </span>
+                </div>
+                <div className="absolute bottom-1 inset-x-0 flex justify-center z-10">
+                  <span className="text-[7px] text-zinc-600 font-mono tracking-widest">
+                    REEL {i + 1}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-2 h-1 rounded-full bg-zinc-800 overflow-hidden">
+          <div
+            className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light ${spinning ? 'animate-shimmer bg-[length:200%_100%] w-full' : 'w-0'} transition-all duration-300`}
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────────
@@ -388,6 +498,7 @@ export default function App() {
   const [floatMessages, setFloatMessages] = useState<FloatMessage[]>([]);
   const [winFlash, setWinFlash] = useState(false);
   const [lossShake, setLossShake] = useState(false);
+
   const floatId = useRef(0);
   const prevUnlocked = useRef(0);
   const slotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -395,6 +506,17 @@ export default function App() {
 
   const stage = STAGES[currentStage];
   const minBet = stage.minBet;
+
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!link) {
+      const m = document.createElement('link');
+      m.rel = 'manifest';
+      m.href = '/manifest.webmanifest';
+      document.head.appendChild(m);
+    }
+    document.documentElement.style.setProperty('--sat', 'env(safe-area-inset-top)');
+  }, []);
 
   const recalcPassive = useCallback((upgrades: UpgradesBought, stageIdx: number) => {
     const stageMult = 1 + stageIdx * 0.5;
@@ -411,9 +533,7 @@ export default function App() {
 
   useEffect(() => {
     if (passiveIncomeRate <= 0) return;
-    const id = setInterval(() => {
-      setPlayerMoney((m) => m + passiveIncomeRate);
-    }, 1000);
+    const id = setInterval(() => setPlayerMoney((m) => m + passiveIncomeRate), 1000);
     return () => clearInterval(id);
   }, [passiveIncomeRate]);
 
@@ -424,12 +544,10 @@ export default function App() {
       setStageModal(STAGES[unlocked]);
       setSlotsState((s) => ({
         ...s,
-        reels: [...STAGES[unlocked].symbols] as [string, string, string],
-        slotResultMessage: 'New venue unlocked! Spin the reels.',
+        reels: [...STAGES[unlocked].symbols],
+        slotResultMessage: 'New venue unlocked. Premium reels calibrated.',
       }));
-      if (currentBet < STAGES[unlocked].minBet) {
-        setCurrentBet(STAGES[unlocked].minBet);
-      }
+      if (currentBet < STAGES[unlocked].minBet) setCurrentBet(STAGES[unlocked].minBet);
     }
     prevUnlocked.current = unlocked;
   }, [playerMoney, currentBet]);
@@ -448,9 +566,7 @@ export default function App() {
   const addFloat = useCallback((text: string, positive: boolean) => {
     const id = ++floatId.current;
     setFloatMessages((prev) => [...prev, { id, text, positive }]);
-    setTimeout(() => {
-      setFloatMessages((prev) => prev.filter((m) => m.id !== id));
-    }, 1200);
+    setTimeout(() => setFloatMessages((prev) => prev.filter((m) => m.id !== id)), 1200);
   }, []);
 
   const feedbackWin = useCallback(
@@ -476,8 +592,7 @@ export default function App() {
   const upgradeCost = (key: UpgradeKey): number => {
     const base = UPGRADE_BASE[key].cost;
     const count = upgradesBought[key];
-    const stageMult = 1 + currentStage * 0.35;
-    return Math.floor(base * Math.pow(1.5, count) * stageMult);
+    return Math.floor(base * Math.pow(1.5, count) * (1 + currentStage * 0.35));
   };
 
   const buyUpgrade = (key: UpgradeKey) => {
@@ -498,35 +613,22 @@ export default function App() {
     (
       playerHand: Card[],
       dealerHand: Card[],
-      _deck: Card[],
       bet: number,
       playerNatural: boolean,
       dealerNatural: boolean,
     ): { message: string; payout: number } => {
       const pv = handValue(playerHand);
       const dv = handValue(dealerHand);
-
-      if (playerNatural && dealerNatural) {
-        return { message: 'Push — both Blackjack!', payout: bet };
-      }
-      if (playerNatural) {
-        return { message: 'Blackjack! Pays 3:2', payout: bet + bet * 1.5 };
-      }
-      if (dealerNatural) {
-        return { message: 'Dealer Blackjack — you lose.', payout: 0 };
-      }
-      if (pv.total > 21) {
-        return { message: `Bust (${pv.total}) — you lose.`, payout: 0 };
-      }
-      if (dv.total > 21) {
-        return { message: `Dealer busts (${dv.total}) — you win!`, payout: bet * 2 };
-      }
-      if (pv.total > dv.total) {
-        return { message: `You win ${pv.total} vs ${dv.total}!`, payout: bet * 2 };
-      }
-      if (pv.total < dv.total) {
-        return { message: `Dealer wins ${dv.total} vs ${pv.total}.`, payout: 0 };
-      }
+      if (playerNatural && dealerNatural)
+        return { message: 'Push — both natural blackjack.', payout: bet };
+      if (playerNatural) return { message: 'Natural blackjack. Pays 3:2.', payout: bet + bet * 1.5 };
+      if (dealerNatural) return { message: 'Dealer blackjack. Wager lost.', payout: 0 };
+      if (pv.total > 21) return { message: `Player bust (${pv.total}).`, payout: 0 };
+      if (dv.total > 21) return { message: `Dealer bust (${dv.total}). You win.`, payout: bet * 2 };
+      if (pv.total > dv.total)
+        return { message: `You win ${pv.total} over ${dv.total}.`, payout: bet * 2 };
+      if (pv.total < dv.total)
+        return { message: `Dealer wins ${dv.total} over ${pv.total}.`, payout: 0 };
       return { message: `Push at ${pv.total}.`, payout: bet };
     },
     [],
@@ -536,15 +638,12 @@ export default function App() {
     (playerHand: Card[], dealerHand: Card[], deck: Card[], bet: number) => {
       const pv = handValue(playerHand);
       const dv = handValue(dealerHand);
-      const playerNatural = pv.isBlackjack;
-      const dealerNatural = dv.isBlackjack;
       const { message, payout } = resolveBlackjack(
         playerHand,
         dealerHand,
-        deck,
         bet,
-        playerNatural,
-        dealerNatural,
+        pv.isBlackjack,
+        dv.isBlackjack,
       );
       const net = payout - bet;
       if (net > 0) feedbackWin(net);
@@ -601,7 +700,6 @@ export default function App() {
       const { message, payout } = resolveBlackjack(
         playerHand,
         dealerHand,
-        deck,
         bet,
         pv.isBlackjack,
         dv.isBlackjack,
@@ -627,7 +725,7 @@ export default function App() {
       dealerHand,
       deck,
       gameStatus: 'player-turn',
-      resultMessage: 'Your move — Hit, Stand, or Double.',
+      resultMessage: 'Your action — Hit, Stand, or Double Down.',
       activeBet: bet,
       doubled: false,
       dealerHoleHidden: true,
@@ -650,7 +748,7 @@ export default function App() {
         playerHand,
         deck,
         gameStatus: 'resolved',
-        resultMessage: `Bust (${pv.total}) — you lose.`,
+        resultMessage: `Bust (${pv.total}). Wager lost.`,
         dealerHoleHidden: false,
       }));
       return;
@@ -671,7 +769,7 @@ export default function App() {
       ...s,
       playerHand,
       deck,
-      resultMessage: `Hand: ${pv.total}. Hit or Stand?`,
+      resultMessage: `Hand value ${pv.total}. Continue or stand.`,
     }));
   };
 
@@ -680,7 +778,7 @@ export default function App() {
     setBlackjackState((s) => ({
       ...s,
       gameStatus: 'dealer-turn',
-      resultMessage: 'Dealer plays…',
+      resultMessage: 'Dealer draws…',
       dealerHoleHidden: false,
     }));
     dealerPlay(
@@ -711,7 +809,7 @@ export default function App() {
         playerHand,
         deck,
         gameStatus: 'resolved',
-        resultMessage: `Double Down bust (${pv.total})!`,
+        resultMessage: `Double down bust (${pv.total}).`,
         activeBet: bet,
         doubled: true,
         dealerHoleHidden: false,
@@ -726,7 +824,7 @@ export default function App() {
       activeBet: bet,
       doubled: true,
       dealerHoleHidden: false,
-      resultMessage: 'Double Down — dealer plays…',
+      resultMessage: 'Double down complete. Dealer plays.',
     }));
     dealerPlay(playerHand, blackjackState.dealerHand, deck, bet);
   };
@@ -747,14 +845,10 @@ export default function App() {
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
     setPlayerMoney((m) => m - bet);
-    setSlotsState((s) => ({ ...s, isSpinning: true, slotResultMessage: 'Spinning…' }));
-
+    setSlotsState((s) => ({ ...s, isSpinning: true, slotResultMessage: 'Reels engaged…' }));
     slotSpinSoundRef.current = setInterval(() => playSlotClick(), 80);
-
     const symbols = stage.symbols;
     let ticks = 0;
-    const maxTicks = 19;
-
     slotIntervalRef.current = setInterval(() => {
       ticks++;
       setSlotsState((s) => ({
@@ -763,12 +857,11 @@ export default function App() {
           symbols[Math.floor(Math.random() * 3)],
           symbols[Math.floor(Math.random() * 3)],
           symbols[Math.floor(Math.random() * 3)],
-        ] as [string, string, string],
+        ],
       }));
-      if (ticks >= maxTicks) {
+      if (ticks >= 19) {
         if (slotIntervalRef.current) clearInterval(slotIntervalRef.current);
         if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
-
         const final: [string, string, string] = [
           symbols[Math.floor(Math.random() * 3)],
           symbols[Math.floor(Math.random() * 3)],
@@ -776,13 +869,13 @@ export default function App() {
         ];
         const [a, b, c] = final;
         let payout = 0;
-        let msg = 'No match — bet lost.';
+        let msg = 'No match. Wager forfeited.';
         if (a === b && b === c) {
           payout = bet * 10;
-          msg = `JACKPOT! Triple ${a} — ${formatMoney(payout)}!`;
+          msg = `JACKPOT — Triple match. ${formatMoney(payout)}`;
         } else if (a === b || b === c || a === c) {
           payout = bet * 2;
-          msg = `Two of a kind — ${formatMoney(payout)}!`;
+          msg = `Pair payout. ${formatMoney(payout)}`;
         }
         const net = payout - bet;
         if (net > 0) {
@@ -791,11 +884,7 @@ export default function App() {
         } else {
           feedbackLoss(bet);
         }
-        setSlotsState({
-          reels: final,
-          isSpinning: false,
-          slotResultMessage: msg,
-        });
+        setSlotsState({ reels: final, isSpinning: false, slotResultMessage: msg });
       }
     }, 79);
   };
@@ -804,392 +893,385 @@ export default function App() {
     if (playerMoney < STAGES[idx].unlockCost) return;
     setCurrentStage(idx);
     setCurrentBet(Math.max(currentBet, STAGES[idx].minBet));
-    setSlotsState((s) => ({
-      ...s,
-      reels: [...STAGES[idx].symbols] as [string, string, string],
-    }));
+    setSlotsState((s) => ({ ...s, reels: [...STAGES[idx].symbols] }));
   };
 
-  const t = stage.theme;
+  const acc = stage.accent;
   const canBet = blackjackState.gameStatus === 'betting';
   const playerTurn = blackjackState.gameStatus === 'player-turn';
   const resolved = blackjackState.gameStatus === 'resolved';
 
+  const navItems: { tab: Tab; icon: string; label: string }[] = [
+    { tab: 'blackjack', icon: '♠', label: 'Blackjack' },
+    { tab: 'slots', icon: '◆', label: 'Slots' },
+    { tab: 'shop', icon: '✦', label: 'Shop' },
+    { tab: 'empire', icon: '♛', label: 'Empire' },
+  ];
+
   return (
     <div
-      className={`max-w-md mx-auto h-screen flex flex-col overflow-hidden bg-gradient-to-b ${t.gradient} ${winFlash ? 'animate-flash-win' : ''} ${lossShake ? 'animate-shake-loss' : ''}`}
+      className={`max-w-md mx-auto h-[100dvh] flex flex-col bg-midnight text-gold-light/90 overflow-hidden ${winFlash ? 'animate-flash-win' : ''} ${lossShake ? 'animate-shake-loss' : ''}`}
     >
-      {/* Header */}
-      <header className={`shrink-0 px-4 pt-3 pb-2 border-b ${t.border} ${t.panel}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className={`text-sm font-bold tracking-wider uppercase ${t.accent}`}>
-              Casino Tycoon
-            </h1>
-            <p className={`text-xs opacity-80 ${t.text}`}>{stage.name}</p>
+      <header className="shrink-0 pt-safe px-safe border-b border-white/10 backdrop-blur-md bg-black/40">
+        <div className="px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] tracking-[0.35em] uppercase text-gold/60 font-medium">
+                Lone Empire
+              </p>
+              <h1 className="font-display text-lg font-bold text-gold-gradient leading-tight">
+                Casino Tycoon
+              </h1>
+              <p className={`text-xs mt-0.5 ${acc.label}`}>{stage.name}</p>
+            </div>
+            <GlassPanel className="px-3 py-2 text-right min-w-[100px]" glow={acc.glow}>
+              <p className="text-[9px] uppercase tracking-widest text-zinc-500">Balance</p>
+              <p className="text-xl font-bold tabular-nums text-gold-light">
+                {formatMoney(playerMoney)}
+              </p>
+              {passiveIncomeRate > 0 && (
+                <p className="text-[10px] text-emerald-400/90 tabular-nums">
+                  +{formatMoney(passiveIncomeRate)}/s
+                </p>
+              )}
+            </GlassPanel>
           </div>
-          <div className="text-right">
-            <p className={`text-lg font-black tabular-nums ${t.accent}`}>
-              {formatMoney(playerMoney)}
-            </p>
-            {passiveIncomeRate > 0 && (
-              <p className="text-[10px] text-green-400">+{formatMoney(passiveIncomeRate)}/s</p>
-            )}
-          </div>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className={`text-[10px] ${t.text} opacity-70`}>Bet:</span>
-          <button
-            type="button"
-            onClick={() => adjustBet(-minBet)}
-            className={`w-7 h-7 rounded-full border ${t.border} text-xs font-bold ${t.text} active:scale-95`}
-          >
-            −
-          </button>
-          <span className={`flex-1 text-center font-bold tabular-nums ${t.accent}`}>
-            {formatMoney(currentBet)}
-          </span>
-          <button
-            type="button"
-            onClick={() => adjustBet(minBet)}
-            className={`w-7 h-7 rounded-full border ${t.border} text-xs font-bold ${t.text} active:scale-95`}
-          >
-            +
-          </button>
-          <span className={`text-[10px] opacity-60 ${t.text}`}>min {formatMoney(minBet)}</span>
+          <GlassPanel className="mt-3 px-3 py-2 flex items-center gap-2">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider shrink-0">
+              Wager
+            </span>
+            <button
+              type="button"
+              onClick={() => adjustBet(-minBet)}
+              className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-gold btn-premium text-sm font-bold"
+            >
+              −
+            </button>
+            <span className="flex-1 text-center font-bold tabular-nums text-gold-light text-base">
+              {formatMoney(currentBet)}
+            </span>
+            <button
+              type="button"
+              onClick={() => adjustBet(minBet)}
+              className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-gold btn-premium text-sm font-bold"
+            >
+              +
+            </button>
+            <span className="text-[9px] text-zinc-600 shrink-0">min {formatMoney(minBet)}</span>
+          </GlassPanel>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className={`flex-1 overflow-y-auto px-3 py-3 relative ${t.bg}`}>
-        {floatMessages.map((fm) => (
-          <div
-            key={fm.id}
-            className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 font-black text-lg animate-float-up ${
-              fm.positive ? 'text-green-400' : 'text-red-500'
-            }`}
-            style={{ top: '30%' }}
-          >
-            {fm.text}
-          </div>
-        ))}
-
-        {currentTab === 'blackjack' && (
-          <section className={`rounded-2xl border p-3 ${t.panel} ${t.glow}`}>
-            <h2 className={`text-center font-bold mb-2 ${t.accent}`}>🃏 Blackjack Pro</h2>
-            {highCardPct !== null && (
-              <p className="text-center text-xs text-cyan-300 mb-2">
-                High cards remaining: <span className="font-bold">{highCardPct}%</span>
-              </p>
-            )}
-            <p className={`text-center text-xs mb-3 ${t.text} opacity-90`}>
-              {blackjackState.resultMessage}
-            </p>
-
-            <div className="mb-3">
-              <p className={`text-xs mb-1 ${t.text} opacity-70`}>Dealer</p>
-              <div className="flex flex-wrap gap-1.5 justify-center min-h-[52px]">
-                {blackjackState.dealerHand.map((card, i) => (
-                  <div
-                    key={`d-${i}`}
-                    className={`w-10 h-14 rounded-lg border-2 flex items-center justify-center text-sm font-bold bg-white/10 ${
-                      blackjackState.dealerHoleHidden && i === 1
-                        ? 'bg-zinc-700 border-zinc-500'
-                        : t.border
-                    }`}
-                  >
-                    {blackjackState.dealerHoleHidden && i === 1 ? (
-                      <span className="text-zinc-400">?</span>
-                    ) : (
-                      <span className={cardColor(card)}>{cardLabel(card)}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0 && (
-                <p className={`text-center text-xs mt-1 ${t.accent}`}>
-                  {handValue(blackjackState.dealerHand).total}
-                </p>
-              )}
-            </div>
-
-            <div className="mb-3">
-              <p className={`text-xs mb-1 ${t.text} opacity-70`}>You</p>
-              <div className="flex flex-wrap gap-1.5 justify-center min-h-[52px]">
-                {blackjackState.playerHand.map((card, i) => (
-                  <div
-                    key={`p-${i}`}
-                    className={`w-10 h-14 rounded-lg border-2 flex items-center justify-center text-sm font-bold bg-white/10 ${t.border}`}
-                  >
-                    <span className={cardColor(card)}>{cardLabel(card)}</span>
-                  </div>
-                ))}
-              </div>
-              {blackjackState.playerHand.length > 0 && (
-                <p className={`text-center text-xs mt-1 font-bold ${t.accent}`}>
-                  {handValue(blackjackState.playerHand).total}
-                </p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {canBet && (
-                <button
-                  type="button"
-                  onClick={placeBet}
-                  disabled={playerMoney < currentBet}
-                  className={`col-span-2 py-3 rounded-xl font-bold bg-green-700 text-white active:scale-95 disabled:opacity-40`}
-                >
-                  Deal — {formatMoney(currentBet)}
-                </button>
-              )}
-              {playerTurn && (
-                <>
-                  <button
-                    type="button"
-                    onClick={hit}
-                    className="py-2.5 rounded-xl font-bold bg-blue-600 text-white active:scale-95"
-                  >
-                    Hit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={stand}
-                    className="py-2.5 rounded-xl font-bold bg-amber-600 text-white active:scale-95"
-                  >
-                    Stand
-                  </button>
-                  <button
-                    type="button"
-                    onClick={doubleDown}
-                    disabled={
-                      blackjackState.playerHand.length !== 2 ||
-                      playerMoney < blackjackState.activeBet
-                    }
-                    className="col-span-2 py-2.5 rounded-xl font-bold bg-purple-700 text-white active:scale-95 disabled:opacity-40"
-                  >
-                    Double Down
-                  </button>
-                </>
-              )}
-              {resolved && (
-                <button
-                  type="button"
-                  onClick={newHand}
-                  className={`col-span-2 py-3 rounded-xl font-bold border-2 ${t.border} ${t.accent} active:scale-95`}
-                >
-                  New Hand
-                </button>
-              )}
-            </div>
-          </section>
-        )}
-
-        {currentTab === 'slots' && (
-          <section className={`rounded-2xl border p-4 ${t.panel} ${t.glow}`}>
-            <h2 className={`text-center font-bold mb-4 ${t.accent}`}>🎰 Underground Slots</h2>
-            <div className="flex justify-center gap-2 mb-4">
-              {slotsState.reels.map((sym, i) => (
-                <div
-                  key={i}
-                  className={`w-20 h-24 rounded-xl border-2 flex items-center justify-center text-4xl bg-black/40 ${
-                    slotsState.isSpinning ? 'animate-pulse scale-105' : ''
-                  } ${t.border}`}
-                >
-                  {sym}
-                </div>
-              ))}
-            </div>
-            <p className={`text-center text-sm mb-4 min-h-[40px] ${t.text}`}>
-              {slotsState.slotResultMessage}
-            </p>
-            <p className={`text-center text-[10px] mb-3 opacity-70 ${t.text}`}>
-              3 match = 10× · 2 match = 2×
-            </p>
-            <button
-              type="button"
-              onClick={spinSlots}
-              disabled={slotsState.isSpinning || playerMoney < currentBet}
-              className={`w-full py-4 rounded-xl font-black text-lg bg-gradient-to-r from-pink-600 to-purple-700 text-white active:scale-95 disabled:opacity-40 ${
-                currentStage === 3 ? 'animate-shimmer bg-[length:200%_auto] from-yellow-600 via-amber-400 to-yellow-600' : ''
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-safe">
+        <div className="px-3 py-3 relative min-h-full">
+          {floatMessages.map((fm) => (
+            <div
+              key={fm.id}
+              className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 font-bold text-lg animate-float-up ${
+                fm.positive ? 'text-emerald-400' : 'text-red-400'
               }`}
+              style={{ top: '28%' }}
             >
-              {slotsState.isSpinning ? 'SPINNING…' : `SPIN ${formatMoney(currentBet)}`}
-            </button>
-          </section>
-        )}
+              {fm.text}
+            </div>
+          ))}
 
-        {currentTab === 'shop' && (
-          <section className="space-y-3">
-            <h2 className={`text-center font-bold ${t.accent}`}>🛒 Upgrade Shop</h2>
-            {(
-              [
-                {
-                  key: 'hustler' as UpgradeKey,
-                  name: stage.shopNames.hustler,
-                  desc: `+${UPGRADE_BASE.hustler.income} passive $/s per level (scales with stage)`,
-                  icon: '🤖',
-                },
-                {
-                  key: 'lens' as UpgradeKey,
-                  name: stage.shopNames.lens,
-                  desc: 'Reveals high-card % left in the blackjack shoe',
-                  icon: '🔍',
-                },
-                {
-                  key: 'ownership' as UpgradeKey,
-                  name: stage.shopNames.ownership,
-                  desc: 'Exponential passive income (doubles effect per buy)',
-                  icon: '👑',
-                },
-              ] as const
-            ).map((item) => {
-              const owned = upgradesBought[item.key];
-              const cost = upgradeCost(item.key);
-              const isLens = item.key === 'lens';
-              const disabled =
-                playerMoney < cost || (isLens && owned > 0);
-              return (
-                <div
-                  key={item.key}
-                  className={`rounded-xl border p-3 ${t.panel} ${t.border}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{item.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold text-sm ${t.accent}`}>{item.name}</h3>
-                      <p className={`text-[11px] opacity-80 ${t.text}`}>{item.desc}</p>
-                      <p className="text-[10px] text-zinc-400 mt-1">Owned: {owned}</p>
+          {currentTab === 'blackjack' && (
+            <GlassPanel glow={acc.glow} className={`p-4 ring-1 ${acc.ring}`}>
+              <h2 className="text-center font-display text-base font-bold text-gold-gradient mb-1">
+                Blackjack Pro
+              </h2>
+              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-3">
+                6-deck shoe · Dealer stands on hard 17
+              </p>
+              {highCardPct !== null && (
+                <div className="mb-3 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center">
+                  <span className="text-[10px] text-emerald-400/80 uppercase tracking-wider">
+                    High Card Index
+                  </span>
+                  <p className="text-lg font-bold text-emerald-300 tabular-nums">{highCardPct}%</p>
+                </div>
+              )}
+              <p className="text-center text-xs text-zinc-400 mb-4 min-h-[32px]">
+                {blackjackState.resultMessage}
+              </p>
+
+              <div className="felt-table rounded-xl p-4 border border-felt-light/30 shadow-inner mb-3">
+                <p className="text-[10px] uppercase tracking-widest text-gold/50 mb-2">Dealer</p>
+                <div className="flex flex-wrap gap-2 justify-center min-h-[60px] items-center">
+                  {blackjackState.dealerHand.map((card, i) => (
+                    <PlayingCard
+                      key={`d-${i}`}
+                      card={card}
+                      hidden={blackjackState.dealerHoleHidden && i === 1}
+                    />
+                  ))}
+                </div>
+                {!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0 && (
+                  <p className="text-center text-xs text-gold/70 mt-2 tabular-nums">
+                    {handValue(blackjackState.dealerHand).total}
+                  </p>
+                )}
+              </div>
+
+              <div className="felt-table rounded-xl p-4 border border-felt-light/30 shadow-inner mb-4">
+                <p className="text-[10px] uppercase tracking-widest text-gold/50 mb-2">Player</p>
+                <div className="flex flex-wrap gap-2 justify-center min-h-[60px] items-center">
+                  {blackjackState.playerHand.map((card, i) => (
+                    <PlayingCard key={`p-${i}`} card={card} />
+                  ))}
+                </div>
+                {blackjackState.playerHand.length > 0 && (
+                  <p className="text-center text-sm font-bold text-gold-light mt-2 tabular-nums">
+                    {handValue(blackjackState.playerHand).total}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {canBet && (
+                  <GoldButton
+                    onClick={placeBet}
+                    disabled={playerMoney < currentBet}
+                    variant="felt"
+                  >
+                    Deal · {formatMoney(currentBet)}
+                  </GoldButton>
+                )}
+                {playerTurn && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <GoldButton onClick={hit}>Hit</GoldButton>
+                    <GoldButton onClick={stand} variant="secondary">
+                      Stand
+                    </GoldButton>
+                    <div className="col-span-2">
+                      <GoldButton
+                        onClick={doubleDown}
+                        disabled={
+                          blackjackState.playerHand.length !== 2 ||
+                          playerMoney < blackjackState.activeBet
+                        }
+                      >
+                        Double Down
+                      </GoldButton>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => buyUpgrade(item.key)}
-                    disabled={disabled}
-                    className={`mt-2 w-full py-2 rounded-lg font-bold text-sm bg-green-700/90 text-white disabled:opacity-40 active:scale-95`}
-                  >
-                    {isLens && owned > 0
-                      ? 'Purchased'
-                      : `Buy — ${formatMoney(cost)}`}
-                  </button>
-                </div>
-              );
-            })}
-          </section>
-        )}
+                )}
+                {resolved && (
+                  <GoldButton onClick={newHand} variant="secondary">
+                    New Hand
+                  </GoldButton>
+                )}
+              </div>
+            </GlassPanel>
+          )}
 
-        {currentTab === 'empire' && (
-          <section className="space-y-3">
-            <h2 className={`text-center font-bold ${t.accent}`}>👑 Your Empire</h2>
-            <div className={`rounded-xl border p-4 text-center ${t.panel} ${t.glow}`}>
-              <p className={`text-3xl font-black ${t.accent}`}>{formatMoney(playerMoney)}</p>
-              <p className={`text-sm mt-1 ${t.text}`}>Net Worth</p>
-              <p className="text-green-400 text-sm mt-2 font-bold">
-                Empire Income: {formatMoney(passiveIncomeRate)}/sec
+          {currentTab === 'slots' && (
+            <GlassPanel glow={acc.glow} className={`p-4 ring-1 ${acc.ring}`}>
+              <h2 className="text-center font-display text-base font-bold text-gold-gradient mb-1">
+                Signature Slots
+              </h2>
+              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-4">
+                Professional cabinet · 3-reel
               </p>
-            </div>
-            <div className={`rounded-xl border p-3 ${t.panel}`}>
-              <h3 className={`font-bold text-sm mb-2 ${t.accent}`}>Venues</h3>
-              {STAGES.map((s, idx) => {
-                const unlocked = playerMoney >= s.unlockCost;
-                const active = currentStage === idx;
+              <SlotCabinet reels={slotsState.reels} spinning={slotsState.isSpinning} />
+              <p className="text-center text-sm text-zinc-400 mt-4 mb-2 min-h-[40px]">
+                {slotsState.slotResultMessage}
+              </p>
+              <p className="text-center text-[10px] text-zinc-600 mb-4">
+                Triple 10× · Pair 2×
+              </p>
+              <GoldButton
+                onClick={spinSlots}
+                disabled={slotsState.isSpinning || playerMoney < currentBet}
+                className={
+                  currentStage === 3
+                    ? 'shadow-[0_0_30px_rgba(212,175,55,0.4)]'
+                    : ''
+                }
+              >
+                {slotsState.isSpinning
+                  ? 'SPINNING…'
+                  : `Initiate Spin · ${formatMoney(currentBet)}`}
+              </GoldButton>
+            </GlassPanel>
+          )}
+
+          {currentTab === 'shop' && (
+            <section className="space-y-3">
+              <h2 className="text-center font-display text-base font-bold text-gold-gradient">
+                Concierge Shop
+              </h2>
+              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase -mt-1 mb-2">
+                Acquire strategic assets
+              </p>
+              {(
+                [
+                  {
+                    key: 'hustler' as UpgradeKey,
+                    name: stage.shopNames.hustler,
+                    desc: `+${UPGRADE_BASE.hustler.income} passive income per level`,
+                    tier: 'standard' as const,
+                  },
+                  {
+                    key: 'lens' as UpgradeKey,
+                    name: stage.shopNames.lens,
+                    desc: 'Displays high-card percentage in shoe',
+                    tier: 'premium' as const,
+                  },
+                  {
+                    key: 'ownership' as UpgradeKey,
+                    name: stage.shopNames.ownership,
+                    desc: 'Exponential empire revenue multiplier',
+                    tier: 'elite' as const,
+                  },
+                ] as const
+              ).map((item) => {
+                const owned = upgradesBought[item.key];
+                const cost = upgradeCost(item.key);
+                const isLens = item.key === 'lens';
+                const disabled = playerMoney < cost || (isLens && owned > 0);
+                const elite = item.tier === 'elite';
                 return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => selectStage(idx)}
-                    disabled={!unlocked}
-                    className={`w-full text-left p-2.5 mb-2 rounded-lg border transition-all ${
-                      active ? t.navActive : `${t.border} ${unlocked ? 'opacity-100' : 'opacity-40'}`
-                    } disabled:cursor-not-allowed`}
+                  <GlassPanel
+                    key={item.key}
+                    glow={elite ? 'shadow-[0_0_28px_rgba(212,175,55,0.25)]' : acc.glow}
+                    className={`p-4 ${elite ? 'ring-1 ring-gold/40 bg-gradient-to-br from-gold/5 to-transparent' : ''}`}
                   >
-                    <div className="flex justify-between items-center">
-                      <span className={`text-sm font-bold ${t.text}`}>{s.name}</span>
-                      {unlocked ? (
-                        <span className="text-[10px] text-green-400">OPEN</span>
-                      ) : (
-                        <span className="text-[10px] text-amber-500">
-                          🔒 {formatMoney(s.unlockCost)}
-                        </span>
-                      )}
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                      <div>
+                        <h3 className="font-semibold text-gold-light text-sm">{item.name}</h3>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">{item.desc}</p>
+                      </div>
+                      <span className="text-[10px] text-zinc-600 tabular-nums">×{owned}</span>
                     </div>
-                    <p className={`text-[10px] opacity-70 ${t.text}`}>
-                      Min bet {formatMoney(s.minBet)} · {s.symbols.join(' ')}
-                    </p>
-                  </button>
+                    <GoldButton onClick={() => buyUpgrade(item.key)} disabled={disabled}>
+                      {isLens && owned > 0 ? 'Acquired' : `Acquire · ${formatMoney(cost)}`}
+                    </GoldButton>
+                  </GlassPanel>
                 );
               })}
-            </div>
-            <div className={`rounded-xl border p-3 ${t.panel}`}>
-              <h3 className={`font-bold text-sm mb-2 ${t.accent}`}>Assets Owned</h3>
-              <ul className={`text-xs space-y-1 ${t.text}`}>
-                <li>
-                  {stage.shopNames.hustler}: {upgradesBought.hustler}
-                </li>
-                <li>
-                  {stage.shopNames.lens}: {upgradesBought.lens > 0 ? 'Active' : '—'}
-                </li>
-                <li>
-                  {stage.shopNames.ownership}: {upgradesBought.ownership}
-                </li>
-              </ul>
-            </div>
-          </section>
-        )}
+            </section>
+          )}
+
+          {currentTab === 'empire' && (
+            <section className="space-y-3">
+              <h2 className="text-center font-display text-base font-bold text-gold-gradient">
+                Empire Overview
+              </h2>
+              <GlassPanel glow={acc.glow} className="p-5 text-center">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Net Worth</p>
+                <p className="text-4xl font-bold text-gold-gradient tabular-nums mt-1">
+                  {formatMoney(playerMoney)}
+                </p>
+                <div className="mt-3 pt-3 border-t border-white/10">
+                  <p className="text-xs text-emerald-400/90">
+                    Passive yield · {formatMoney(passiveIncomeRate)}/sec
+                  </p>
+                </div>
+              </GlassPanel>
+              <GlassPanel className="p-4">
+                <h3 className="text-xs uppercase tracking-widest text-gold/60 mb-3">Venues</h3>
+                {STAGES.map((s, idx) => {
+                  const unlocked = playerMoney >= s.unlockCost;
+                  const active = currentStage === idx;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => selectStage(idx)}
+                      disabled={!unlocked}
+                      className={`w-full text-left p-3 mb-2 rounded-xl border transition-all btn-premium ${
+                        active
+                          ? `border-gold/50 bg-gold/10 ${s.accent.navGlow}`
+                          : 'border-white/10 bg-white/[0.02]'
+                      } ${unlocked ? 'opacity-100' : 'opacity-40'} disabled:cursor-not-allowed`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-semibold text-gold-light/90">{s.name}</span>
+                        {unlocked ? (
+                          <span className="text-[9px] text-emerald-400 tracking-wider">OPEN</span>
+                        ) : (
+                          <span className="text-[9px] text-gold/60">
+                            LOCKED · {formatMoney(s.unlockCost)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1">
+                        Min {formatMoney(s.minBet)} · {s.symbols.join(' ')}
+                      </p>
+                    </button>
+                  );
+                })}
+              </GlassPanel>
+              <GlassPanel className="p-4">
+                <h3 className="text-xs uppercase tracking-widest text-gold/60 mb-2">Portfolio</h3>
+                <ul className="text-xs text-zinc-400 space-y-1.5">
+                  <li className="flex justify-between">
+                    <span>{stage.shopNames.hustler}</span>
+                    <span className="text-gold/80">{upgradesBought.hustler}</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>{stage.shopNames.lens}</span>
+                    <span className="text-gold/80">
+                      {upgradesBought.lens > 0 ? 'Active' : '—'}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>{stage.shopNames.ownership}</span>
+                    <span className="text-gold/80">{upgradesBought.ownership}</span>
+                  </li>
+                </ul>
+              </GlassPanel>
+            </section>
+          )}
+        </div>
       </main>
 
-      {/* Bottom nav */}
-      <nav
-        className={`shrink-0 grid grid-cols-4 border-t ${t.nav} safe-area-pb`}
-      >
-        {(
-          [
-            { tab: 'blackjack' as Tab, label: '🃏', sub: 'Cards' },
-            { tab: 'slots' as Tab, label: '🎰', sub: 'Slots' },
-            { tab: 'shop' as Tab, label: '🛒', sub: 'Shop' },
-            { tab: 'empire' as Tab, label: '👑', sub: 'Empire' },
-          ] as const
-        ).map((item) => (
-          <button
-            key={item.tab}
-            type="button"
-            onClick={() => setCurrentTab(item.tab)}
-            className={`flex flex-col items-center py-2.5 text-[10px] border-t-2 transition-colors ${
-              currentTab === item.tab
-                ? `${t.navActive} border-current`
-                : `border-transparent opacity-60 ${t.text}`
-            }`}
-          >
-            <span className="text-xl leading-none">{item.label}</span>
-            <span className="mt-0.5 font-semibold">{item.sub}</span>
-          </button>
-        ))}
+      <nav className="shrink-0 pb-safe px-safe border-t border-white/10 bg-black/60 backdrop-blur-xl">
+        <div className="grid grid-cols-4">
+          {navItems.map((item) => {
+            const active = currentTab === item.tab;
+            return (
+              <button
+                key={item.tab}
+                type="button"
+                onClick={() => setCurrentTab(item.tab)}
+                className={`flex flex-col items-center py-2.5 btn-premium transition-colors ${
+                  active
+                    ? `text-gold ${acc.navGlow} bg-white/5`
+                    : 'text-zinc-600'
+                }`}
+              >
+                <span className="text-lg leading-none font-display">{item.icon}</span>
+                <span className="text-[9px] mt-1 font-medium tracking-wide uppercase">
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {/* Stage unlock modal */}
       {stageModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div
-            className={`max-w-sm w-full rounded-2xl border-2 border-yellow-400 p-6 text-center animate-modal-flash bg-gradient-to-br from-yellow-900 via-amber-800 to-black shadow-[0_0_60px_rgba(234,179,8,0.8)]`}
-          >
-            <p className="text-yellow-300 text-sm font-bold tracking-[0.3em] uppercase animate-pulse">
-              ✨ Achievement ✨
-            </p>
-            <h2 className="text-3xl font-black text-yellow-400 mt-2 drop-shadow-lg">
-              STAGE UNLOCKED!
-            </h2>
-            <p className="text-5xl my-4">🎉</p>
-            <p className="text-xl font-bold text-white">{stageModal.name}</p>
-            <p className="text-sm text-yellow-200/80 mt-2">
-              Min bet: {formatMoney(stageModal.minBet)} · New symbols unlocked
-            </p>
-            <button
-              type="button"
-              onClick={() => setStageModal(null)}
-              className="mt-6 w-full py-3 rounded-xl bg-yellow-500 text-black font-black text-lg active:scale-95"
-            >
-              Enter the Floor
-            </button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 pt-safe pb-safe">
+          <div className="gold-border max-w-sm w-full animate-modal-flash shadow-[0_0_80px_rgba(212,175,55,0.35)]">
+            <div className="gold-border-inner p-6 text-center">
+              <p className="text-[10px] tracking-[0.4em] uppercase text-gold/70">Achievement</p>
+              <h2 className="font-display text-2xl font-bold text-gold-gradient mt-2">
+                Stage Unlocked
+              </h2>
+              <div className="my-4 w-16 h-16 mx-auto rounded-full border-2 border-gold/50 flex items-center justify-center text-2xl bg-gold/10">
+                ♛
+              </div>
+              <p className="text-lg font-semibold text-gold-light">{stageModal.name}</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Minimum wager {formatMoney(stageModal.minBet)} · Premium reels active
+              </p>
+              <div className="mt-6">
+                <GoldButton onClick={() => setStageModal(null)}>Enter the Floor</GoldButton>
+              </div>
+            </div>
           </div>
         </div>
       )}
