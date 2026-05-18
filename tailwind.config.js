@@ -36,6 +36,7 @@ export default {
         'modal-flash': 'modalFlash 1s ease-in-out infinite',
         'reel-blur': 'reelBlur 0.08s linear infinite',
         'scanline': 'scanline 4s linear infinite',
+        'card-deal': 'cardDeal 0.35s ease-out forwards',
       },
       keyframes: {
         flashWin: {
@@ -70,6 +71,10 @@ export default {
         scanline: {
           '0%': { transform: 'translateY(-100%)' },
           '100%': { transform: 'translateY(400%)' },
+        },
+        cardDeal: {
+          '0%': { opacity: '0', transform: 'translateY(-10px) scale(0.92)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
       },
     },

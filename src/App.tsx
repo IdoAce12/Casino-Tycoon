@@ -162,6 +162,13 @@ const UPGRADE_BASE = {
 };
 
 const REEL_CELL_H = 56;
+const DEALER_DRAW_DELAY_MS = 1000;
+const DEALER_RESOLVE_DELAY_MS = 800;
+
+function dealerMustHit(hand: Card[]): boolean {
+  const dv = handValue(hand);
+  return dv.total < 17 || (dv.total === 17 && dv.isSoft);
+}
 
 // ─── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -383,12 +390,14 @@ function GoldButton({
   disabled = false,
   variant = 'primary',
   className = '',
+  dense = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'danger' | 'felt';
   className?: string;
+  dense?: boolean;
 }) {
   const inner =
     variant === 'felt'
@@ -407,7 +416,9 @@ function GoldButton({
       className={`gold-border w-full btn-premium disabled:opacity-35 disabled:pointer-events-none ${className}`}
     >
       <span
-        className={`gold-border-inner block w-full px-4 py-3 text-center text-sm font-semibold tracking-wide ${inner}`}
+        className={`gold-border-inner block w-full text-center font-semibold tracking-wide ${inner} ${
+          dense ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'
+        }`}
       >
         {children}
       </span>
@@ -418,23 +429,38 @@ function GoldButton({
 function PlayingCard({
   card,
   hidden = false,
+  compact = false,
+  animateIn = false,
 }: {
   card?: Card;
   hidden?: boolean;
+  compact?: boolean;
+  animateIn?: boolean;
 }) {
+  const size = compact ? 'w-11 h-[3.25rem]' : 'w-14 h-20';
+  const rankSize = compact ? 'text-sm' : 'text-lg';
+  const suitSize = compact ? 'text-xl' : 'text-2xl';
+  const anim = animateIn ? 'animate-card-deal' : '';
+
   if (hidden) {
     return (
-      <div className="w-14 h-20 rounded-xl border border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-xl">
-        <div className="w-9 h-12 rounded-lg border border-gold/30 bg-gradient-to-br from-gold-dark to-gold/50" />
+      <div
+        className={`${size} rounded-xl border border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-xl ${anim}`}
+      >
+        <div
+          className={`${compact ? 'w-7 h-9' : 'w-9 h-12'} rounded-lg border border-gold/30 bg-gradient-to-br from-gold-dark to-gold/50`}
+        />
       </div>
     );
   }
   if (!card) return null;
   const color = cardColor(card);
   return (
-    <div className="w-14 h-20 rounded-xl bg-white border border-amber-500/30 shadow-xl flex flex-col items-center justify-center gap-0.5">
-      <span className={`text-lg font-black leading-none tracking-tight ${color}`}>{card.rank}</span>
-      <span className={`text-2xl font-black leading-none ${color}`}>{card.suit}</span>
+    <div
+      className={`${size} rounded-xl bg-white border border-amber-500/30 shadow-xl flex flex-col items-center justify-center gap-0.5 ${anim}`}
+    >
+      <span className={`${rankSize} font-black leading-none tracking-tight ${color}`}>{card.rank}</span>
+      <span className={`${suitSize} font-black leading-none ${color}`}>{card.suit}</span>
     </div>
   );
 }
@@ -591,6 +617,8 @@ export default function App() {
   const prevUnlocked = useRef(0);
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dealerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dealerActiveRef = useRef(false);
 
   const stage = STAGES[currentStage];
   const minBet = stage.minBet;
@@ -648,7 +676,16 @@ export default function App() {
     return () => {
       if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
       if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
+      if (dealerTimeoutRef.current) clearTimeout(dealerTimeoutRef.current);
     };
+  }, []);
+
+  const clearDealerSequence = useCallback(() => {
+    if (dealerTimeoutRef.current) {
+      clearTimeout(dealerTimeoutRef.current);
+      dealerTimeoutRef.current = null;
+    }
+    dealerActiveRef.current = false;
   }, []);
 
   const addFloat = useCallback((text: string, positive: boolean) => {
@@ -751,24 +788,73 @@ export default function App() {
     [resolveBlackjack, feedbackWin, feedbackLoss],
   );
 
-  const dealerPlay = useCallback(
+  const runDealerTurn = useCallback(
     (playerHand: Card[], dealerHand: Card[], deck: Card[], bet: number) => {
+      clearDealerSequence();
+      dealerActiveRef.current = true;
+
       let dHand = [...dealerHand];
       let dDeck = [...deck];
-      let dv = handValue(dHand);
-      while (dv.total < 17 || (dv.total === 17 && dv.isSoft)) {
+
+      const resolveAfterPause = () => {
+        dealerTimeoutRef.current = setTimeout(() => {
+          dealerActiveRef.current = false;
+          finishRound(playerHand, dHand, dDeck, bet);
+        }, DEALER_RESOLVE_DELAY_MS);
+      };
+
+      const drawStep = () => {
+        if (!dealerMustHit(dHand)) {
+          resolveAfterPause();
+          return;
+        }
+
         const drawn = drawCard(dDeck);
         dHand = [...dHand, drawn.card];
         dDeck = drawn.deck;
-        dv = handValue(dHand);
+        playCardDeal();
+
+        const total = handValue(dHand).total;
+        const stillHitting = dealerMustHit(dHand);
+
+        setBlackjackState((s) => ({
+          ...s,
+          playerHand,
+          dealerHand: dHand,
+          deck: dDeck,
+          gameStatus: 'dealer-turn',
+          dealerHoleHidden: false,
+          resultMessage: stillHitting
+            ? `Dealer hits… ${total}`
+            : `Dealer stands on ${total}.`,
+        }));
+
+        dealerTimeoutRef.current = setTimeout(
+          stillHitting ? drawStep : resolveAfterPause,
+          DEALER_DRAW_DELAY_MS,
+        );
+      };
+
+      setBlackjackState((s) => ({
+        ...s,
+        gameStatus: 'dealer-turn',
+        dealerHoleHidden: false,
+        resultMessage: 'Dealer reveals hole card…',
+      }));
+
+      if (!dealerMustHit(dHand)) {
+        dealerTimeoutRef.current = setTimeout(resolveAfterPause, DEALER_DRAW_DELAY_MS);
+        return;
       }
-      finishRound(playerHand, dHand, dDeck, bet);
+
+      dealerTimeoutRef.current = setTimeout(drawStep, DEALER_DRAW_DELAY_MS);
     },
-    [finishRound],
+    [finishRound, clearDealerSequence],
   );
 
   const placeBet = () => {
     if (blackjackState.gameStatus !== 'betting') return;
+    clearDealerSequence();
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
     setPlayerMoney((m) => m - bet);
@@ -821,7 +907,7 @@ export default function App() {
   };
 
   const hit = () => {
-    if (blackjackState.gameStatus !== 'player-turn') return;
+    if (blackjackState.gameStatus !== 'player-turn' || dealerActiveRef.current) return;
     const bet = blackjackState.activeBet;
     let deck = [...blackjackState.deck];
     const drawn = drawCard(deck);
@@ -850,7 +936,7 @@ export default function App() {
         resultMessage: 'Dealer reveals…',
         dealerHoleHidden: false,
       }));
-      dealerPlay(playerHand, blackjackState.dealerHand, deck, bet);
+      runDealerTurn(playerHand, blackjackState.dealerHand, deck, bet);
       return;
     }
     setBlackjackState((s) => ({
@@ -862,14 +948,14 @@ export default function App() {
   };
 
   const stand = () => {
-    if (blackjackState.gameStatus !== 'player-turn') return;
+    if (blackjackState.gameStatus !== 'player-turn' || dealerActiveRef.current) return;
     setBlackjackState((s) => ({
       ...s,
       gameStatus: 'dealer-turn',
       resultMessage: 'Dealer draws…',
       dealerHoleHidden: false,
     }));
-    dealerPlay(
+    runDealerTurn(
       blackjackState.playerHand,
       blackjackState.dealerHand,
       blackjackState.deck,
@@ -878,7 +964,7 @@ export default function App() {
   };
 
   const doubleDown = () => {
-    if (blackjackState.gameStatus !== 'player-turn') return;
+    if (blackjackState.gameStatus !== 'player-turn' || dealerActiveRef.current) return;
     if (blackjackState.playerHand.length !== 2) return;
     const extra = blackjackState.activeBet;
     if (playerMoney < extra) return;
@@ -914,10 +1000,11 @@ export default function App() {
       dealerHoleHidden: false,
       resultMessage: 'Double down complete. Dealer plays.',
     }));
-    dealerPlay(playerHand, blackjackState.dealerHand, deck, bet);
+    runDealerTurn(playerHand, blackjackState.dealerHand, deck, bet);
   };
 
   const newHand = () => {
+    clearDealerSequence();
     setBlackjackState((s) => ({
       ...initialBlackjack(),
       deck: s.deck.length > 20 ? s.deck : createShoe(),
@@ -1001,6 +1088,7 @@ export default function App() {
   const acc = stage.accent;
   const canBet = blackjackState.gameStatus === 'betting';
   const playerTurn = blackjackState.gameStatus === 'player-turn';
+  const dealerTurn = blackjackState.gameStatus === 'dealer-turn';
   const resolved = blackjackState.gameStatus === 'resolved';
 
   const navItems: { tab: Tab; icon: string; label: string }[] = [
@@ -1079,71 +1167,88 @@ export default function App() {
           ))}
 
           {currentTab === 'blackjack' && (
-            <GlassPanel glow={acc.glow} className={`p-4 ring-1 ${acc.ring}`}>
-              <h2 className="text-center font-display text-base font-bold text-gold-gradient mb-1">
-                Blackjack Pro
-              </h2>
-              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-3">
-                6-deck shoe · Dealer stands on hard 17
-              </p>
-              {highCardPct !== null && (
-                <div className="mb-3 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center">
-                  <span className="text-[10px] text-emerald-400/80 uppercase tracking-wider">
-                    High Card Index
-                  </span>
-                  <p className="text-lg font-bold text-emerald-300 tabular-nums">{highCardPct}%</p>
-                </div>
-              )}
-              <p className="text-center text-xs text-zinc-400 mb-4 min-h-[32px]">
-                {blackjackState.resultMessage}
-              </p>
-
-              <div className="felt-table rounded-xl p-4 border border-felt-light/30 shadow-inner mb-3">
-                <p className="text-[10px] uppercase tracking-widest text-gold/50 mb-2">Dealer</p>
-                <div className="flex flex-wrap gap-2 justify-center min-h-[60px] items-center">
-                  {blackjackState.dealerHand.map((card, i) => (
-                    <PlayingCard
-                      key={`d-${i}`}
-                      card={card}
-                      hidden={blackjackState.dealerHoleHidden && i === 1}
-                    />
-                  ))}
-                </div>
-                {!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0 && (
-                  <p className="text-center text-xs text-gold/70 mt-2 tabular-nums">
-                    {handValue(blackjackState.dealerHand).total}
-                  </p>
+            <GlassPanel
+              glow={acc.glow}
+              className={`p-2.5 ring-1 ${acc.ring} max-h-[70vh] flex flex-col min-h-0`}
+            >
+              <div className="shrink-0">
+                <h2 className="text-center font-display text-sm font-bold text-gold-gradient">
+                  Blackjack Pro
+                </h2>
+                <p className="text-center text-[9px] text-zinc-500 tracking-widest uppercase mb-1">
+                  6-deck · Soft 17
+                </p>
+                {highCardPct !== null && (
+                  <div className="mb-1.5 px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center">
+                    <span className="text-[9px] text-emerald-400/80 uppercase tracking-wider">
+                      High Card Index
+                    </span>
+                    <p className="text-sm font-bold text-emerald-300 tabular-nums">{highCardPct}%</p>
+                  </div>
                 )}
+                <p className="text-center text-[11px] text-zinc-400 mb-1.5 min-h-[28px] leading-tight">
+                  {blackjackState.resultMessage}
+                </p>
               </div>
 
-              <div className="felt-table rounded-xl p-4 border border-felt-light/30 shadow-inner mb-4">
-                <p className="text-[10px] uppercase tracking-widest text-gold/50 mb-2">Player</p>
-                <div className="flex flex-wrap gap-2 justify-center min-h-[60px] items-center">
-                  {blackjackState.playerHand.map((card, i) => (
-                    <PlayingCard key={`p-${i}`} card={card} />
-                  ))}
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 -mx-0.5 px-0.5">
+                <div className="felt-table rounded-lg p-2 border border-felt-light/30 shadow-inner">
+                  <p className="text-[9px] uppercase tracking-widest text-gold/50 mb-1">Dealer</p>
+                  <div className="flex flex-wrap gap-1 justify-center min-h-[44px] items-center">
+                    {blackjackState.dealerHand.map((card, i) => (
+                      <PlayingCard
+                        key={`d-${i}-${card.rank}${card.suit}`}
+                        card={card}
+                        hidden={blackjackState.dealerHoleHidden && i === 1}
+                        compact
+                        animateIn={dealerTurn && i === blackjackState.dealerHand.length - 1}
+                      />
+                    ))}
+                  </div>
+                  {!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0 && (
+                    <p className="text-center text-[10px] text-gold/70 mt-1 tabular-nums">
+                      {handValue(blackjackState.dealerHand).total}
+                    </p>
+                  )}
                 </div>
-                {blackjackState.playerHand.length > 0 && (
-                  <p className="text-center text-sm font-bold text-gold-light mt-2 tabular-nums">
-                    {handValue(blackjackState.playerHand).total}
-                  </p>
-                )}
+
+                <div className="felt-table rounded-lg p-2 border border-felt-light/30 shadow-inner">
+                  <p className="text-[9px] uppercase tracking-widest text-gold/50 mb-1">Player</p>
+                  <div className="flex flex-wrap gap-1 justify-center min-h-[44px] items-center">
+                    {blackjackState.playerHand.map((card, i) => (
+                      <PlayingCard
+                        key={`p-${i}-${card.rank}${card.suit}`}
+                        card={card}
+                        compact
+                        animateIn={playerTurn && i === blackjackState.playerHand.length - 1}
+                      />
+                    ))}
+                  </div>
+                  {blackjackState.playerHand.length > 0 && (
+                    <p className="text-center text-xs font-bold text-gold-light mt-1 tabular-nums">
+                      {handValue(blackjackState.playerHand).total}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="shrink-0 pt-1.5 space-y-1">
                 {canBet && (
                   <GoldButton
                     onClick={placeBet}
                     disabled={playerMoney < currentBet}
                     variant="felt"
+                    dense
                   >
                     Deal · {formatMoney(currentBet)}
                   </GoldButton>
                 )}
                 {playerTurn && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <GoldButton onClick={hit}>Hit</GoldButton>
-                    <GoldButton onClick={stand} variant="secondary">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <GoldButton onClick={hit} dense>
+                      Hit
+                    </GoldButton>
+                    <GoldButton onClick={stand} variant="secondary" dense>
                       Stand
                     </GoldButton>
                     <div className="col-span-2">
@@ -1153,14 +1258,21 @@ export default function App() {
                           blackjackState.playerHand.length !== 2 ||
                           playerMoney < blackjackState.activeBet
                         }
+                        dense
+                        className="shadow-[0_0_16px_rgba(212,175,55,0.2)]"
                       >
                         Double Down
                       </GoldButton>
                     </div>
                   </div>
                 )}
+                {dealerTurn && (
+                  <p className="text-center text-[10px] text-gold/60 py-1 animate-pulse">
+                    Dealer drawing…
+                  </p>
+                )}
                 {resolved && (
-                  <GoldButton onClick={newHand} variant="secondary">
+                  <GoldButton onClick={newHand} variant="secondary" dense>
                     New Hand
                   </GoldButton>
                 )}
@@ -1168,7 +1280,7 @@ export default function App() {
             </GlassPanel>
           )}
 
-          {currentTab === 'slots' && (
+{currentTab === 'slots' && (
             <GlassPanel glow={acc.glow} className={`p-4 ring-1 ${acc.ring}`}>
               <h2 className="text-center font-display text-base font-bold text-gold-gradient mb-1">
                 Signature Slots
