@@ -49,11 +49,35 @@ interface UpgradesBought {
   ownership: number;
 }
 
-interface StageAccent {
-  glow: string;
-  ring: string;
+interface StageTheme {
+  appShell: string;
+  header: string;
+  nav: string;
+  navActive: string;
+  navInactive: string;
   label: string;
-  navGlow: string;
+  title: string;
+  muted: string;
+  money: string;
+  income: string;
+  panel: string;
+  panelGlow: string;
+  ring: string;
+  felt: string;
+  btnWrap: string;
+  btnPrimary: string;
+  btnSecondary: string;
+  btnFelt: string;
+  btnGlow: string;
+  scoreBadge: string;
+  scorePulse: string;
+  cardBack: string;
+  slotFrame: string;
+  slotCabinet: string;
+  slotGlow: string;
+  wagerControl: string;
+  actionDock: string;
+  modalWrap: string;
 }
 
 interface StageConfig {
@@ -62,7 +86,7 @@ interface StageConfig {
   unlockCost: number;
   minBet: number;
   symbols: [string, string, string];
-  accent: StageAccent;
+  theme: StageTheme;
   shopNames: { hustler: string; lens: string; ownership: string };
 }
 
@@ -84,11 +108,35 @@ const STAGES: StageConfig[] = [
     unlockCost: 0,
     minBet: 5,
     symbols: ['❌', '💰', '🪙'],
-    accent: {
-      glow: 'shadow-[0_0_32px_rgba(212,175,55,0.12)]',
-      ring: 'ring-gold/20',
-      label: 'text-zinc-400',
-      navGlow: 'shadow-[inset_0_0_20px_rgba(212,175,55,0.15)]',
+    theme: {
+      appShell: 'bg-gradient-to-b from-stone-900 via-zinc-950 to-neutral-950 text-stone-200',
+      header: 'border-stone-700/50 bg-stone-950/85 backdrop-blur-md',
+      nav: 'border-stone-700/40 bg-stone-950/95 backdrop-blur-xl',
+      navActive: 'text-amber-300 bg-stone-800/60 shadow-[inset_0_0_20px_rgba(251,191,36,0.15)]',
+      navInactive: 'text-stone-600',
+      label: 'text-stone-400',
+      title: 'text-amber-200',
+      muted: 'text-stone-500',
+      money: 'text-amber-100',
+      income: 'text-stone-400',
+      panel: 'bg-stone-900/70 backdrop-blur-md border border-stone-600/45',
+      panelGlow: 'shadow-[0_0_28px_rgba(120,113,108,0.2)]',
+      ring: 'ring-stone-600/35',
+      felt: 'bg-gradient-to-br from-stone-800/95 via-emerald-950/55 to-stone-900 border-stone-600/55 shadow-inner',
+      btnWrap: 'bg-gradient-to-r from-stone-600 via-amber-600 to-stone-600',
+      btnPrimary: 'bg-gradient-to-br from-stone-800 to-zinc-950 text-amber-100',
+      btnSecondary: 'bg-stone-900/95 text-stone-200',
+      btnFelt: 'bg-gradient-to-br from-emerald-950 via-stone-900 to-stone-950 text-amber-100',
+      btnGlow: 'shadow-[0_0_14px_rgba(251,191,36,0.25)]',
+      scoreBadge: 'bg-zinc-950 border-2 border-amber-400/90 text-amber-200',
+      scorePulse: 'shadow-[0_0_20px_rgba(251,191,36,0.65)]',
+      cardBack: 'border-2 border-amber-500/50 bg-gradient-to-br from-stone-800 to-zinc-950',
+      slotFrame: 'border-stone-600/55',
+      slotCabinet: 'bg-gradient-to-b from-stone-800 via-zinc-900 to-stone-950',
+      slotGlow: 'shadow-[0_0_32px_rgba(180,83,9,0.2)]',
+      wagerControl: 'border-stone-600/35 bg-stone-900/55 text-amber-400/90',
+      actionDock: 'border-stone-700/50 bg-stone-950/75',
+      modalWrap: 'bg-gradient-to-r from-stone-500 via-amber-500 to-stone-500',
     },
     shopNames: {
       hustler: 'Street Hustler',
@@ -102,11 +150,35 @@ const STAGES: StageConfig[] = [
     unlockCost: 2500,
     minBet: 50,
     symbols: ['🦩', '🍒', '💵'],
-    accent: {
-      glow: 'shadow-[0_0_40px_rgba(139,92,246,0.18)]',
-      ring: 'ring-violet-500/25',
-      label: 'text-violet-300/80',
-      navGlow: 'shadow-[inset_0_0_24px_rgba(139,92,246,0.2)]',
+    theme: {
+      appShell: 'bg-gradient-to-b from-indigo-950 via-purple-950 to-slate-950 text-cyan-50',
+      header: 'border-cyan-500/25 bg-indigo-950/85 backdrop-blur-md',
+      nav: 'border-fuchsia-500/30 bg-indigo-950/95 backdrop-blur-xl',
+      navActive: 'text-fuchsia-300 bg-fuchsia-950/40 shadow-[inset_0_0_24px_rgba(217,70,239,0.35)]',
+      navInactive: 'text-indigo-600',
+      label: 'text-cyan-300/90',
+      title: 'text-fuchsia-300',
+      muted: 'text-indigo-400',
+      money: 'text-cyan-200',
+      income: 'text-fuchsia-400/90',
+      panel: 'bg-indigo-950/65 backdrop-blur-md border border-cyan-400/35',
+      panelGlow: 'shadow-[0_0_36px_rgba(34,211,238,0.22)]',
+      ring: 'ring-fuchsia-500/40',
+      felt: 'bg-gradient-to-br from-indigo-950 via-blue-950 to-purple-950 border-cyan-400/45 shadow-inner',
+      btnWrap: 'bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-pink-500',
+      btnPrimary: 'bg-gradient-to-br from-indigo-900 to-purple-950 text-cyan-100',
+      btnSecondary: 'bg-indigo-950/95 text-fuchsia-200',
+      btnFelt: 'bg-gradient-to-br from-blue-950 via-indigo-900 to-fuchsia-950 text-white',
+      btnGlow: 'shadow-[0_0_22px_rgba(217,70,239,0.45)]',
+      scoreBadge: 'bg-indigo-950 border-2 border-cyan-400 text-cyan-100',
+      scorePulse: 'shadow-[0_0_24px_rgba(34,211,238,0.75)]',
+      cardBack: 'border-2 border-cyan-400/60 bg-gradient-to-br from-indigo-950 to-purple-950',
+      slotFrame: 'border-cyan-400/50',
+      slotCabinet: 'bg-gradient-to-b from-indigo-900 via-purple-900 to-indigo-950',
+      slotGlow: 'shadow-[0_0_40px_rgba(217,70,239,0.35)]',
+      wagerControl: 'border-cyan-500/35 bg-indigo-950/55 text-cyan-300',
+      actionDock: 'border-fuchsia-500/35 bg-indigo-950/80',
+      modalWrap: 'bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-pink-500',
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
@@ -120,11 +192,35 @@ const STAGES: StageConfig[] = [
     unlockCost: 25000,
     minBet: 500,
     symbols: ['🎲', '💎', '👑'],
-    accent: {
-      glow: 'shadow-[0_0_36px_rgba(13,79,60,0.35)]',
-      ring: 'ring-emerald-500/30',
-      label: 'text-emerald-300/80',
-      navGlow: 'shadow-[inset_0_0_24px_rgba(13,79,60,0.35)]',
+    theme: {
+      appShell: 'bg-gradient-to-b from-amber-950/30 via-emerald-950 to-stone-950 text-emerald-50',
+      header: 'border-amber-700/40 bg-emerald-950/85 backdrop-blur-md',
+      nav: 'border-amber-800/35 bg-emerald-950/95 backdrop-blur-xl',
+      navActive: 'text-amber-300 bg-emerald-900/50 shadow-[inset_0_0_24px_rgba(180,83,9,0.3)]',
+      navInactive: 'text-emerald-800',
+      label: 'text-amber-200/85',
+      title: 'text-amber-300',
+      muted: 'text-emerald-700',
+      money: 'text-amber-200',
+      income: 'text-emerald-400',
+      panel: 'bg-emerald-950/60 backdrop-blur-md border border-amber-700/40',
+      panelGlow: 'shadow-[0_0_32px_rgba(13,79,60,0.35)]',
+      ring: 'ring-amber-600/45',
+      felt: 'bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-950 border-amber-600/50 shadow-inner',
+      btnWrap: 'bg-gradient-to-r from-amber-700 via-yellow-600 to-amber-800',
+      btnPrimary: 'bg-gradient-to-br from-emerald-900 to-emerald-950 text-amber-100',
+      btnSecondary: 'bg-emerald-950/95 text-amber-200/90',
+      btnFelt: 'bg-gradient-to-br from-emerald-800 via-emerald-900 to-emerald-950 text-amber-50',
+      btnGlow: 'shadow-[0_0_18px_rgba(180,83,9,0.4)]',
+      scoreBadge: 'bg-emerald-950 border-2 border-amber-500 text-amber-100',
+      scorePulse: 'shadow-[0_0_22px_rgba(234,179,8,0.6)]',
+      cardBack: 'border-2 border-amber-600/55 bg-gradient-to-br from-emerald-900 to-emerald-950',
+      slotFrame: 'border-amber-600/50',
+      slotCabinet: 'bg-gradient-to-b from-amber-950/40 via-emerald-900 to-emerald-950',
+      slotGlow: 'shadow-[0_0_36px_rgba(180,83,9,0.3)]',
+      wagerControl: 'border-amber-700/40 bg-emerald-950/55 text-amber-300/90',
+      actionDock: 'border-amber-800/40 bg-emerald-950/78',
+      modalWrap: 'bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-700',
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
@@ -138,11 +234,35 @@ const STAGES: StageConfig[] = [
     unlockCost: 250000,
     minBet: 5000,
     symbols: ['🃏', '🦚', '🎰'],
-    accent: {
-      glow: 'shadow-[0_0_50px_rgba(212,175,55,0.45)] animate-pulse-gold',
-      ring: 'ring-gold/50',
-      label: 'text-gold-light',
-      navGlow: 'shadow-[inset_0_0_30px_rgba(212,175,55,0.35)]',
+    theme: {
+      appShell: 'bg-gradient-to-b from-black via-zinc-950 to-stone-950 text-stone-100',
+      header: 'border-yellow-600/35 bg-black/80 backdrop-blur-md',
+      nav: 'border-yellow-700/30 bg-black/92 backdrop-blur-xl',
+      navActive: 'text-yellow-300 bg-yellow-950/25 shadow-[inset_0_0_30px_rgba(212,175,55,0.35)]',
+      navInactive: 'text-zinc-600',
+      label: 'text-yellow-200/80',
+      title: 'text-yellow-400',
+      muted: 'text-zinc-500',
+      money: 'text-yellow-100',
+      income: 'text-yellow-500/90',
+      panel: 'bg-black/75 backdrop-blur-md border border-yellow-600/35',
+      panelGlow: 'shadow-[0_0_48px_rgba(212,175,55,0.28)]',
+      ring: 'ring-yellow-500/50',
+      felt: 'bg-gradient-to-br from-red-950 via-zinc-950 to-black border-yellow-600/45 shadow-[inset_0_2px_12px_rgba(0,0,0,0.6)]',
+      btnWrap: 'bg-gradient-to-r from-yellow-700 via-[#D4AF37] to-yellow-600',
+      btnPrimary: 'bg-gradient-to-br from-zinc-900 via-black to-zinc-950 text-yellow-100',
+      btnSecondary: 'bg-zinc-950/95 text-yellow-200/90',
+      btnFelt: 'bg-gradient-to-br from-red-950 via-zinc-900 to-black text-yellow-50',
+      btnGlow: 'shadow-[0_0_28px_rgba(212,175,55,0.55)]',
+      scoreBadge: 'bg-black border-2 border-[#D4AF37] text-yellow-300',
+      scorePulse: 'shadow-[0_0_28px_rgba(212,175,55,0.85)]',
+      cardBack: 'border-2 border-[#D4AF37]/70 bg-gradient-to-br from-zinc-900 to-black',
+      slotFrame: 'border-yellow-600/55',
+      slotCabinet: 'bg-gradient-to-b from-zinc-900 via-black to-zinc-950',
+      slotGlow: 'shadow-[0_0_50px_rgba(212,175,55,0.45)] animate-pulse-gold',
+      wagerControl: 'border-yellow-700/35 bg-black/60 text-yellow-400/90',
+      actionDock: 'border-yellow-700/40 bg-black/82',
+      modalWrap: 'bg-gradient-to-r from-yellow-600 via-[#D4AF37] to-amber-500',
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
@@ -389,20 +509,27 @@ function initialSlots(symbols: [string, string, string]): SlotsState {
 // ─── UI primitives ─────────────────────────────────────────────────────────────
 
 function GlassPanel({
+  theme,
   children,
   className = '',
   glow = '',
 }: {
+  theme: StageTheme;
   children: ReactNode;
   className?: string;
   glow?: string;
 }) {
   return (
-    <div className={`glass-panel ${glow} ${className}`}>{children}</div>
+    <div
+      className={`theme-transition rounded-2xl backdrop-blur-md border ${theme.panel} ${glow || theme.panelGlow} ${className}`}
+    >
+      {children}
+    </div>
   );
 }
 
 function GoldButton({
+  theme,
   children,
   onClick,
   disabled = false,
@@ -411,6 +538,7 @@ function GoldButton({
   dense = false,
   action = false,
 }: {
+  theme: StageTheme;
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
@@ -421,22 +549,22 @@ function GoldButton({
 }) {
   const inner =
     variant === 'felt'
-      ? 'bg-gradient-to-br from-felt-dark via-felt to-felt-light text-gold-light'
+      ? theme.btnFelt
       : variant === 'danger'
-        ? 'bg-gradient-to-br from-red-950/90 to-midnight/95 text-red-300'
+        ? 'bg-gradient-to-br from-red-950/90 to-black/95 text-red-300'
         : variant === 'secondary'
-          ? 'bg-midnight/90 text-gold-light/90'
-          : 'bg-gradient-to-br from-zinc-900 via-midnight to-black text-gold-light';
+          ? theme.btnSecondary
+          : theme.btnPrimary;
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`gold-border w-full btn-premium disabled:opacity-35 disabled:pointer-events-none ${className}`}
+      className={`theme-transition rounded-xl p-[1px] w-full btn-premium disabled:opacity-35 disabled:pointer-events-none ${theme.btnWrap} ${theme.btnGlow} ${className}`}
     >
       <span
-        className={`gold-border-inner block w-full text-center font-semibold tracking-wide ${inner} ${
+        className={`theme-transition block w-full rounded-[11px] text-center font-semibold tracking-wide ${inner} ${
           action ? 'px-4 py-4 text-base font-bold' : dense ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'
         }`}
       >
@@ -446,16 +574,70 @@ function GoldButton({
   );
 }
 
+function ScoreBadge({ total, theme }: { total: number; theme: StageTheme }) {
+  return (
+    <div
+      className={`absolute -top-2 -right-1 z-30 min-w-[2.5rem] h-10 px-2.5 flex items-center justify-center rounded-full font-black text-xl tabular-nums animate-pulse theme-transition ${theme.scoreBadge} ${theme.scorePulse}`}
+      aria-label={`Hand total ${total}`}
+    >
+      {total}
+    </div>
+  );
+}
+
+function HandArea({
+  label,
+  theme,
+  cards,
+  hiddenIndex,
+  animateLast,
+  showScore,
+  total,
+}: {
+  label: string;
+  theme: StageTheme;
+  cards: Card[];
+  hiddenIndex?: number;
+  animateLast?: boolean;
+  showScore: boolean;
+  total: number;
+}) {
+  return (
+    <div
+      className={`theme-transition relative flex-1 flex flex-col rounded-xl p-3 border shadow-inner min-h-[96px] ${theme.felt}`}
+    >
+      <p className={`text-[10px] uppercase tracking-widest mb-2 text-center font-semibold ${theme.label}`}>
+        {label}
+      </p>
+      <div className="relative flex-1 flex flex-wrap gap-2 justify-center items-center content-center px-1 pt-2">
+        {showScore && <ScoreBadge total={total} theme={theme} />}
+        {cards.map((card, i) => (
+          <PlayingCard
+            key={`${label}-${i}-${card.rank}${card.suit}`}
+            card={card}
+            hidden={hiddenIndex === i}
+            size="large"
+            animateIn={animateLast && i === cards.length - 1}
+            theme={theme}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlayingCard({
   card,
   hidden = false,
   size = 'default',
   animateIn = false,
+  theme,
 }: {
   card?: Card;
   hidden?: boolean;
   size?: 'compact' | 'default' | 'large';
   animateIn?: boolean;
+  theme?: StageTheme;
 }) {
   const sizeClass =
     size === 'large'
@@ -469,13 +651,15 @@ function PlayingCard({
     size === 'large' ? 'w-11 h-14' : size === 'compact' ? 'w-7 h-9' : 'w-9 h-12';
   const anim = animateIn ? 'animate-card-deal' : '';
 
+  const cardBack = theme?.cardBack ?? 'border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black';
+
   if (hidden) {
     return (
       <div
-        className={`${sizeClass} rounded-xl border border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-xl ${anim}`}
+        className={`${sizeClass} rounded-xl ${cardBack} flex items-center justify-center shadow-xl ${anim}`}
       >
         <div
-          className={`${backInner} rounded-lg border border-gold/30 bg-gradient-to-br from-gold-dark to-gold/50`}
+          className={`${backInner} rounded-lg border border-white/20 bg-gradient-to-br from-zinc-700 to-zinc-900`}
         />
       </div>
     );
@@ -573,27 +757,31 @@ function SlotReel({
 }
 
 function SlotCabinet({
+  theme,
   reels,
   spinning,
   reelAnims,
 }: {
+  theme: StageTheme;
   reels: [string, string, string];
   spinning: boolean;
   reelAnims: [ReelAnim, ReelAnim, ReelAnim] | null;
 }) {
   return (
-    <div className="relative w-full mx-auto">
+    <div className={`relative w-full mx-auto theme-transition ${theme.slotGlow}`}>
       <div className="absolute -inset-1 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
-      <div className="relative rounded-2xl border-2 border-gold/40 bg-gradient-to-b from-zinc-800 via-zinc-900 to-black p-2 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div
+        className={`theme-transition relative rounded-2xl border-2 p-2 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] ${theme.slotFrame} ${theme.slotCabinet}`}
+      >
         <div className="flex items-center justify-between px-2 mb-1.5">
-          <span className="text-[10px] font-bold tracking-[0.25em] text-gold/70 uppercase">
+          <span className={`text-[10px] font-bold tracking-[0.25em] uppercase ${theme.title}`}>
             VIP Series
           </span>
           <div className="flex gap-1">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className={`w-1.5 h-1.5 rounded-full ${spinning ? 'bg-gold animate-pulse' : 'bg-gold/30'}`}
+                className={`w-1.5 h-1.5 rounded-full theme-transition ${spinning ? 'bg-white animate-pulse opacity-100' : 'bg-white/30'}`}
               />
             ))}
           </div>
@@ -1117,7 +1305,9 @@ export default function App() {
     }));
   };
 
-  const acc = stage.accent;
+  const theme = stage.theme;
+  const dealerTotal = handValue(blackjackState.dealerHand).total;
+  const playerTotal = handValue(blackjackState.playerHand).total;
   const canBet = blackjackState.gameStatus === 'betting';
   const playerTurn = blackjackState.gameStatus === 'player-turn';
   const dealerTurn = blackjackState.gameStatus === 'dealer-turn';
@@ -1132,54 +1322,54 @@ export default function App() {
 
   return (
     <div
-      className={`max-w-md mx-auto h-[100dvh] flex flex-col bg-midnight text-gold-light/90 overflow-hidden ${winFlash ? 'animate-flash-win' : ''} ${lossShake ? 'animate-shake-loss' : ''}`}
+      className={`theme-transition max-w-md mx-auto h-[100dvh] flex flex-col overflow-hidden ${theme.appShell} ${winFlash ? 'animate-flash-win' : ''} ${lossShake ? 'animate-shake-loss' : ''}`}
     >
-      <header className="shrink-0 pt-safe px-safe border-b border-white/10 backdrop-blur-md bg-black/40">
+      <header className={`theme-transition shrink-0 pt-safe px-safe border-b ${theme.header}`}>
         <div className="px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] tracking-[0.35em] uppercase text-gold/60 font-medium">
+              <p className={`text-[10px] tracking-[0.35em] uppercase font-medium ${theme.muted}`}>
                 Lone Empire
               </p>
-              <h1 className="font-display text-lg font-bold text-gold-gradient leading-tight">
+              <h1 className={`font-display text-lg font-bold leading-tight ${theme.title}`}>
                 Casino Tycoon
               </h1>
-              <p className={`text-xs mt-0.5 ${acc.label}`}>{stage.name}</p>
+              <p className={`text-xs mt-0.5 ${theme.label}`}>{stage.name}</p>
             </div>
-            <GlassPanel className="px-3 py-2 text-right min-w-[100px]" glow={acc.glow}>
-              <p className="text-[9px] uppercase tracking-widest text-zinc-500">Balance</p>
-              <p className="text-xl font-bold tabular-nums text-gold-light">
+            <GlassPanel theme={theme} className="px-3 py-2 text-right min-w-[100px]">
+              <p className={`text-[9px] uppercase tracking-widest ${theme.muted}`}>Balance</p>
+              <p className={`text-xl font-bold tabular-nums ${theme.money}`}>
                 {formatMoney(playerMoney)}
               </p>
               {passiveIncomeRate > 0 && (
-                <p className="text-[10px] text-emerald-400/90 tabular-nums">
+                <p className={`text-[10px] tabular-nums ${theme.income}`}>
                   +{formatMoney(passiveIncomeRate)}/s
                 </p>
               )}
             </GlassPanel>
           </div>
-          <GlassPanel className="mt-3 px-3 py-2 flex items-center gap-2">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider shrink-0">
+          <GlassPanel theme={theme} className={`mt-3 px-3 py-2 flex items-center gap-2 ${theme.wagerControl}`}>
+            <span className={`text-[10px] uppercase tracking-wider shrink-0 ${theme.muted}`}>
               Wager
             </span>
             <button
               type="button"
               onClick={() => adjustBet(-minBet)}
-              className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-gold btn-premium text-sm font-bold"
+              className={`theme-transition w-8 h-8 rounded-lg border btn-premium text-sm font-bold ${theme.wagerControl}`}
             >
               −
             </button>
-            <span className="flex-1 text-center font-bold tabular-nums text-gold-light text-base">
+            <span className={`flex-1 text-center font-bold tabular-nums text-base ${theme.money}`}>
               {formatMoney(currentBet)}
             </span>
             <button
               type="button"
               onClick={() => adjustBet(minBet)}
-              className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-gold btn-premium text-sm font-bold"
+              className={`theme-transition w-8 h-8 rounded-lg border btn-premium text-sm font-bold ${theme.wagerControl}`}
             >
               +
             </button>
-            <span className="text-[9px] text-zinc-600 shrink-0">min {formatMoney(minBet)}</span>
+            <span className={`text-[9px] shrink-0 ${theme.muted}`}>min {formatMoney(minBet)}</span>
           </GlassPanel>
         </div>
       </header>
@@ -1206,67 +1396,47 @@ export default function App() {
 
           {currentTab === 'blackjack' && (
             <GlassPanel
-              glow={acc.glow}
-              className={`flex-1 flex flex-col min-h-0 ring-1 ${acc.ring} p-2 pb-0 overflow-hidden`}
+              theme={theme}
+              className={`flex-1 flex flex-col min-h-0 ring-1 ${theme.ring} p-2 pb-0 overflow-hidden`}
             >
-              <p className="shrink-0 text-center text-[11px] text-zinc-400 min-h-[32px] leading-snug px-1 mb-1">
+              <p className={`shrink-0 text-center text-[11px] min-h-[32px] leading-snug px-1 mb-1 ${theme.muted}`}>
                 {blackjackState.resultMessage}
               </p>
 
               <div className="flex-1 flex flex-col gap-2 min-h-0 py-1">
-                <div className="felt-table flex-1 flex flex-col rounded-xl p-3 border border-felt-light/30 shadow-inner min-h-[88px]">
-                  <p className="text-[10px] uppercase tracking-widest text-gold/60 mb-2 text-center">Dealer</p>
-                  <div className="flex-1 flex flex-wrap gap-2 justify-center items-center content-center">
-                    {blackjackState.dealerHand.map((card, i) => (
-                      <PlayingCard
-                        key={`d-${i}-${card.rank}${card.suit}`}
-                        card={card}
-                        hidden={blackjackState.dealerHoleHidden && i === 1}
-                        size="large"
-                        animateIn={dealerTurn && i === blackjackState.dealerHand.length - 1}
-                      />
-                    ))}
-                  </div>
-                  {!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0 && (
-                    <p className="text-center text-sm text-gold/80 mt-2 tabular-nums font-semibold">
-                      {handValue(blackjackState.dealerHand).total}
-                    </p>
-                  )}
-                </div>
-
-                <div className="felt-table flex-1 flex flex-col rounded-xl p-3 border border-felt-light/30 shadow-inner min-h-[88px]">
-                  <p className="text-[10px] uppercase tracking-widest text-gold/60 mb-2 text-center">Player</p>
-                  <div className="flex-1 flex flex-wrap gap-2 justify-center items-center content-center">
-                    {blackjackState.playerHand.map((card, i) => (
-                      <PlayingCard
-                        key={`p-${i}-${card.rank}${card.suit}`}
-                        card={card}
-                        size="large"
-                        animateIn={playerTurn && i === blackjackState.playerHand.length - 1}
-                      />
-                    ))}
-                  </div>
-                  {blackjackState.playerHand.length > 0 && (
-                    <p className="text-center text-base font-bold text-gold-light mt-2 tabular-nums">
-                      {handValue(blackjackState.playerHand).total}
-                    </p>
-                  )}
-                </div>
+                <HandArea
+                  label="Dealer"
+                  theme={theme}
+                  cards={blackjackState.dealerHand}
+                  hiddenIndex={blackjackState.dealerHoleHidden ? 1 : undefined}
+                  animateLast={dealerTurn}
+                  showScore={!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0}
+                  total={dealerTotal}
+                />
+                <HandArea
+                  label="Player"
+                  theme={theme}
+                  cards={blackjackState.playerHand}
+                  animateLast={playerTurn}
+                  showScore={blackjackState.playerHand.length > 0}
+                  total={playerTotal}
+                />
               </div>
 
-              <div className="shrink-0 pt-2 pb-2 pb-safe border-t border-white/10 bg-black/50 -mx-2 px-2 mt-1 space-y-2">
+              <div className={`theme-transition shrink-0 pt-2 pb-2 pb-safe border-t -mx-2 px-2 mt-1 space-y-2 ${theme.actionDock}`}>
                 {canBet && (
-                  <GoldButton onClick={placeBet} disabled={playerMoney < currentBet} variant="felt" action>
+                  <GoldButton theme={theme} onClick={placeBet} disabled={playerMoney < currentBet} variant="felt" action>
                     Deal · {formatMoney(currentBet)}
                   </GoldButton>
                 )}
                 {playerTurn && (
                   <>
                     <div className="grid grid-cols-2 gap-2">
-                      <GoldButton onClick={hit} action>Hit</GoldButton>
-                      <GoldButton onClick={stand} variant="secondary" action>Stand</GoldButton>
+                      <GoldButton theme={theme} onClick={hit} action>Hit</GoldButton>
+                      <GoldButton theme={theme} onClick={stand} variant="secondary" action>Stand</GoldButton>
                     </div>
                     <GoldButton
+                      theme={theme}
                       onClick={doubleDown}
                       disabled={blackjackState.playerHand.length !== 2 || playerMoney < blackjackState.activeBet}
                       dense
@@ -1277,10 +1447,10 @@ export default function App() {
                   </>
                 )}
                 {dealerTurn && (
-                  <p className="text-center text-xs text-gold/70 py-2 animate-pulse font-medium">Dealer drawing…</p>
+                  <p className={`text-center text-xs py-2 animate-pulse font-medium ${theme.label}`}>Dealer drawing…</p>
                 )}
                 {resolved && (
-                  <GoldButton onClick={newHand} variant="secondary" action>New Hand</GoldButton>
+                  <GoldButton theme={theme} onClick={newHand} variant="secondary" action>New Hand</GoldButton>
                 )}
               </div>
             </GlassPanel>
@@ -1288,17 +1458,18 @@ export default function App() {
 
           {currentTab === 'slots' && (
             <GlassPanel
-              glow={acc.glow}
-              className={`p-2 ring-1 ${acc.ring} flex flex-col flex-1 min-h-0`}
+              theme={theme}
+              className={`p-2 ring-1 ${theme.ring} flex flex-col flex-1 min-h-0`}
             >
-              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-2 shrink-0">
+              <p className={`text-center text-[10px] tracking-widest uppercase mb-2 shrink-0 ${theme.muted}`}>
                 VIP · 3-reel
               </p>
               <div className="flex-1 flex items-center min-h-0 py-1">
                 <SlotCabinet
-                reels={slotsState.reels}
-                spinning={slotsState.isSpinning}
-                reelAnims={slotsState.reelAnims}
+                  theme={theme}
+                  reels={slotsState.reels}
+                  spinning={slotsState.isSpinning}
+                  reelAnims={slotsState.reelAnims}
                 />
               </div>
               <p className="text-center text-xs text-zinc-400 mt-2 mb-1 min-h-[32px] shrink-0">
@@ -1308,6 +1479,7 @@ export default function App() {
                 Triple 10× · Pair 2×
               </p>
               <GoldButton
+                theme={theme}
                 onClick={spinSlots}
                 disabled={slotsState.isSpinning || playerMoney < currentBet}
                 className={
@@ -1325,10 +1497,10 @@ export default function App() {
 
           {currentTab === 'shop' && (
             <section className="space-y-3">
-              <h2 className="text-center font-display text-base font-bold text-gold-gradient">
+              <h2 className={`text-center font-display text-base font-bold ${theme.title}`}>
                 Concierge Shop
               </h2>
-              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase -mt-1 mb-2">
+              <p className={`text-center text-[10px] tracking-widest uppercase -mt-1 mb-2 ${theme.muted}`}>
                 Acquire strategic assets
               </p>
               {(
@@ -1360,18 +1532,19 @@ export default function App() {
                 const elite = item.tier === 'elite';
                 return (
                   <GlassPanel
+                    theme={theme}
                     key={item.key}
-                    glow={elite ? 'shadow-[0_0_28px_rgba(212,175,55,0.25)]' : acc.glow}
+                    glow={elite ? 'shadow-[0_0_28px_rgba(212,175,55,0.25)]' : undefined}
                     className={`p-4 ${elite ? 'ring-1 ring-gold/40 bg-gradient-to-br from-gold/5 to-transparent' : ''}`}
                   >
                     <div className="flex justify-between items-start gap-2 mb-2">
                       <div>
-                        <h3 className="font-semibold text-gold-light text-sm">{item.name}</h3>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">{item.desc}</p>
+                        <h3 className={`font-semibold text-sm ${theme.money}`}>{item.name}</h3>
+                        <p className={`text-[11px] mt-0.5 ${theme.muted}`}>{item.desc}</p>
                       </div>
                       <span className="text-[10px] text-zinc-600 tabular-nums">×{owned}</span>
                     </div>
-                    <GoldButton onClick={() => buyUpgrade(item.key)} disabled={disabled}>
+                    <GoldButton theme={theme} onClick={() => buyUpgrade(item.key)} disabled={disabled}>
                       {isLens && owned > 0 ? 'Acquired' : `Acquire · ${formatMoney(cost)}`}
                     </GoldButton>
                   </GlassPanel>
@@ -1382,12 +1555,12 @@ export default function App() {
 
           {currentTab === 'empire' && (
             <section className="space-y-3">
-              <h2 className="text-center font-display text-base font-bold text-gold-gradient">
+              <h2 className={`text-center font-display text-base font-bold ${theme.title}`}>
                 Empire Overview
               </h2>
-              <GlassPanel glow={acc.glow} className="p-5 text-center">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Net Worth</p>
-                <p className="text-4xl font-bold text-gold-gradient tabular-nums mt-1">
+              <GlassPanel theme={theme} className="p-5 text-center">
+                <p className={`text-[10px] uppercase tracking-[0.3em] ${theme.muted}`}>Net Worth</p>
+                <p className={`text-4xl font-bold tabular-nums mt-1 ${theme.money}`}>
                   {formatMoney(playerMoney)}
                 </p>
                 <div className="mt-3 pt-3 border-t border-white/10">
@@ -1396,8 +1569,8 @@ export default function App() {
                   </p>
                 </div>
               </GlassPanel>
-              <GlassPanel className="p-4">
-                <h3 className="text-xs uppercase tracking-widest text-gold/60 mb-3">Venues</h3>
+              <GlassPanel theme={theme} className="p-4">
+                <h3 className={`text-xs uppercase tracking-widest mb-3 ${theme.label}`}>Venues</h3>
                 {STAGES.map((s, idx) => {
                   const unlocked = lifetimePeakMoney >= s.unlockCost;
                   const active = currentStage === idx;
@@ -1409,7 +1582,7 @@ export default function App() {
                       disabled={!unlocked}
                       className={`w-full text-left p-3 mb-2 rounded-xl border transition-all btn-premium ${
                         active
-                          ? `border-gold/50 bg-gold/10 ${s.accent.navGlow}`
+                          ? `border-current/50 ${s.theme.navActive}`
                           : 'border-white/10 bg-white/[0.02]'
                       } ${unlocked ? 'opacity-100' : 'opacity-40'} disabled:cursor-not-allowed`}
                     >
@@ -1430,8 +1603,8 @@ export default function App() {
                   );
                 })}
               </GlassPanel>
-              <GlassPanel className="p-4">
-                <h3 className="text-xs uppercase tracking-widest text-gold/60 mb-2">Portfolio</h3>
+              <GlassPanel theme={theme} className="p-4">
+                <h3 className={`text-xs uppercase tracking-widest mb-2 ${theme.label}`}>Portfolio</h3>
                 <ul className="text-xs text-zinc-400 space-y-1.5">
                   <li className="flex justify-between">
                     <span>{stage.shopNames.hustler}</span>
@@ -1454,7 +1627,7 @@ export default function App() {
         </div>
       </main>
 
-      <nav className="shrink-0 pb-safe px-safe border-t border-white/10 bg-black/60 backdrop-blur-xl">
+      <nav className={`theme-transition shrink-0 pb-safe px-safe border-t ${theme.nav}`}>
         <div className="grid grid-cols-4">
           {navItems.map((item) => {
             const active = currentTab === item.tab;
@@ -1463,10 +1636,8 @@ export default function App() {
                 key={item.tab}
                 type="button"
                 onClick={() => setCurrentTab(item.tab)}
-                className={`flex flex-col items-center py-2.5 btn-premium transition-colors ${
-                  active
-                    ? `text-gold ${acc.navGlow} bg-white/5`
-                    : 'text-zinc-600'
+                className={`theme-transition flex flex-col items-center py-2.5 btn-premium ${
+                  active ? theme.navActive : theme.navInactive
                 }`}
               >
                 <span className="text-lg leading-none font-display">{item.icon}</span>
@@ -1481,21 +1652,21 @@ export default function App() {
 
       {stageModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 pt-safe pb-safe">
-          <div className="gold-border max-w-sm w-full animate-modal-flash shadow-[0_0_80px_rgba(212,175,55,0.35)]">
-            <div className="gold-border-inner p-6 text-center">
-              <p className="text-[10px] tracking-[0.4em] uppercase text-gold/70">Achievement</p>
-              <h2 className="font-display text-2xl font-bold text-gold-gradient mt-2">
+          <div className={`theme-transition rounded-xl p-[1px] max-w-sm w-full animate-modal-flash ${theme.modalWrap} ${theme.btnGlow}`}>
+            <div className={`rounded-[11px] p-6 text-center ${theme.panel}`}>
+              <p className={`text-[10px] tracking-[0.4em] uppercase ${theme.muted}`}>Achievement</p>
+              <h2 className={`font-display text-2xl font-bold mt-2 ${theme.title}`}>
                 Stage Unlocked
               </h2>
-              <div className="my-4 w-16 h-16 mx-auto rounded-full border-2 border-gold/50 flex items-center justify-center text-2xl bg-gold/10">
+              <div className={`my-4 w-16 h-16 mx-auto rounded-full border-2 flex items-center justify-center text-2xl ${theme.scoreBadge}`}>
                 ♛
               </div>
-              <p className="text-lg font-semibold text-gold-light">{stageModal.name}</p>
-              <p className="text-xs text-zinc-500 mt-2">
+              <p className={`text-lg font-semibold ${theme.money}`}>{stageModal.name}</p>
+              <p className={`text-xs mt-2 ${theme.muted}`}>
                 Minimum wager {formatMoney(stageModal.minBet)} · Premium reels active
               </p>
               <div className="mt-6">
-                <GoldButton onClick={() => setStageModal(null)}>Enter the Floor</GoldButton>
+                <GoldButton theme={theme} onClick={() => setStageModal(null)}>Enter the Floor</GoldButton>
               </div>
             </div>
           </div>

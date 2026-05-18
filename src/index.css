@@ -62,4 +62,8 @@ body,
     will-change: transform;
     backface-visibility: hidden;
   }
+
+  .theme-transition {
+    transition: all 0.5s ease-in-out;
+  }
 }
