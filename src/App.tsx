@@ -281,6 +281,7 @@ const UPGRADE_BASE = {
 const SLOT_REEL_CELL_H = 76;
 const DEALER_DRAW_DELAY_MS = 1000;
 const DEALER_RESOLVE_DELAY_MS = 800;
+const DEALER_FAILSAFE_MS = 20000;
 
 function dealerMustHit(hand: Card[]): boolean {
   const dv = handValue(hand);
@@ -590,7 +591,6 @@ function HandArea({
   theme,
   cards,
   hiddenIndex,
-  animateLast,
   showScore,
   total,
 }: {
@@ -598,26 +598,24 @@ function HandArea({
   theme: StageTheme;
   cards: Card[];
   hiddenIndex?: number;
-  animateLast?: boolean;
   showScore: boolean;
   total: number;
 }) {
   return (
     <div
-      className={`theme-transition relative flex-1 flex flex-col rounded-xl p-3 border shadow-inner min-h-[96px] ${theme.felt}`}
+      className={`theme-transition relative flex-1 flex flex-col min-h-0 rounded-xl p-3 border shadow-inner min-h-[96px] overflow-hidden ${theme.felt}`}
     >
-      <p className={`text-[10px] uppercase tracking-widest mb-2 text-center font-semibold ${theme.label}`}>
+      <p className={`text-[10px] uppercase tracking-widest mb-2 text-center font-semibold shrink-0 ${theme.label}`}>
         {label}
       </p>
-      <div className="relative flex-1 flex flex-wrap gap-2 justify-center items-center content-center px-1 pt-2">
+      <div className="relative z-0 flex-1 min-h-0 flex flex-wrap gap-2 justify-center items-center content-center px-1 pt-2 overflow-hidden">
         {showScore && <ScoreBadge total={total} theme={theme} />}
         {cards.map((card, i) => (
           <PlayingCard
-            key={`${label}-${i}-${card.rank}${card.suit}`}
+            key={`${label}-${card.rank}${card.suit}-${i}`}
             card={card}
             hidden={hiddenIndex === i}
             size="large"
-            animateIn={animateLast && i === cards.length - 1}
             theme={theme}
           />
         ))}
@@ -630,15 +628,14 @@ function PlayingCard({
   card,
   hidden = false,
   size = 'default',
-  animateIn = false,
   theme,
 }: {
   card?: Card;
   hidden?: boolean;
   size?: 'compact' | 'default' | 'large';
-  animateIn?: boolean;
   theme?: StageTheme;
 }) {
+  const [dealAnim, setDealAnim] = useState(true);
   const sizeClass =
     size === 'large'
       ? 'w-[4.25rem] h-[5.75rem]'
@@ -649,7 +646,13 @@ function PlayingCard({
   const suitSize = size === 'large' ? 'text-3xl' : size === 'compact' ? 'text-xl' : 'text-2xl';
   const backInner =
     size === 'large' ? 'w-11 h-14' : size === 'compact' ? 'w-7 h-9' : 'w-9 h-12';
-  const anim = animateIn ? 'animate-card-deal' : '';
+
+  useEffect(() => {
+    const endTimer = setTimeout(() => setDealAnim(false), 380);
+    return () => clearTimeout(endTimer);
+  }, []);
+
+  const anim = dealAnim ? 'animate-card-deal' : '';
 
   const cardBack = theme?.cardBack ?? 'border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black';
 
@@ -832,12 +835,21 @@ export default function App() {
   const [floatMessages, setFloatMessages] = useState<FloatMessage[]>([]);
   const [winFlash, setWinFlash] = useState(false);
   const [lossShake, setLossShake] = useState(false);
+  const [blackjackBusy, setBlackjackBusy] = useState(false);
 
   const floatId = useRef(0);
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dealerFailsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dealerSeqRef = useRef(0);
   const dealerActiveRef = useRef(false);
+  const dealerCtxRef = useRef({
+    playerHand: [] as Card[],
+    dealerHand: [] as Card[],
+    deck: [] as Card[],
+    bet: 0,
+  });
 
   const stage = STAGES[currentStage];
   const minBet = stage.minBet;
@@ -902,16 +914,41 @@ export default function App() {
       if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
       if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
       if (dealerTimeoutRef.current) clearTimeout(dealerTimeoutRef.current);
+      if (dealerFailsafeRef.current) clearTimeout(dealerFailsafeRef.current);
+      dealerSeqRef.current += 1;
+      dealerActiveRef.current = false;
     };
   }, []);
 
-  const clearDealerSequence = useCallback(() => {
+  const cancelDealerTimers = useCallback(() => {
     if (dealerTimeoutRef.current) {
       clearTimeout(dealerTimeoutRef.current);
       dealerTimeoutRef.current = null;
     }
-    dealerActiveRef.current = false;
+    if (dealerFailsafeRef.current) {
+      clearTimeout(dealerFailsafeRef.current);
+      dealerFailsafeRef.current = null;
+    }
   }, []);
+
+  const releaseDealerLock = useCallback(() => {
+    cancelDealerTimers();
+    dealerActiveRef.current = false;
+    setBlackjackBusy(false);
+  }, [cancelDealerTimers]);
+
+  const clearDealerSequence = useCallback(() => {
+    dealerSeqRef.current += 1;
+    releaseDealerLock();
+  }, [releaseDealerLock]);
+
+  useEffect(() => {
+    if (blackjackState.gameStatus === 'dealer-turn') return;
+    dealerSeqRef.current += 1;
+    cancelDealerTimers();
+    dealerActiveRef.current = false;
+    setBlackjackBusy(false);
+  }, [blackjackState.gameStatus, cancelDealerTimers]);
 
   const addFloat = useCallback((text: string, positive: boolean) => {
     const id = ++floatId.current;
@@ -981,78 +1018,107 @@ export default function App() {
 
   const finishRound = useCallback(
     (playerHand: Card[], dealerHand: Card[], deck: Card[], bet: number) => {
-      const pv = handValue(playerHand);
-      const dv = handValue(dealerHand);
-      const { message, payout } = resolveBlackjack(
-        playerHand,
-        dealerHand,
-        bet,
-        pv.isBlackjack,
-        dv.isBlackjack,
-      );
-      const net = payout - bet;
-      if (net > 0) feedbackWin(net);
-      else if (net < 0) feedbackLoss(bet);
-      setPlayerMoney((m) => m + payout);
-      setBlackjackState((s) => ({
-        ...s,
-        playerHand,
-        dealerHand,
-        deck,
-        gameStatus: 'resolved',
-        resultMessage: message,
-        dealerHoleHidden: false,
-        activeBet: bet,
-      }));
+      try {
+        const pv = handValue(playerHand);
+        const dv = handValue(dealerHand);
+        const { message, payout } = resolveBlackjack(
+          playerHand,
+          dealerHand,
+          bet,
+          pv.isBlackjack,
+          dv.isBlackjack,
+        );
+        const net = payout - bet;
+        if (net > 0) feedbackWin(net);
+        else if (net < 0) feedbackLoss(bet);
+        setPlayerMoney((m) => m + payout);
+        setBlackjackState((s) => ({
+          ...s,
+          playerHand,
+          dealerHand,
+          deck,
+          gameStatus: 'resolved',
+          resultMessage: message,
+          dealerHoleHidden: false,
+          activeBet: bet,
+        }));
+      } finally {
+        releaseDealerLock();
+      }
     },
-    [resolveBlackjack, feedbackWin, feedbackLoss],
+    [resolveBlackjack, feedbackWin, feedbackLoss, releaseDealerLock],
   );
 
   const runDealerTurn = useCallback(
     (playerHand: Card[], dealerHand: Card[], deck: Card[], bet: number) => {
-      clearDealerSequence();
+      const seq = ++dealerSeqRef.current;
+      cancelDealerTimers();
       dealerActiveRef.current = true;
+      setBlackjackBusy(true);
 
       let dHand = [...dealerHand];
       let dDeck = [...deck];
+      dealerCtxRef.current = { playerHand, dealerHand: dHand, deck: dDeck, bet };
+
+      const isStale = () => seq !== dealerSeqRef.current;
+
+      const schedule = (fn: () => void, delay: number) => {
+        dealerTimeoutRef.current = setTimeout(() => {
+          if (isStale()) return;
+          fn();
+        }, delay);
+      };
+
+      dealerFailsafeRef.current = setTimeout(() => {
+        if (isStale()) return;
+        const ctx = dealerCtxRef.current;
+        finishRound(ctx.playerHand, ctx.dealerHand, ctx.deck, ctx.bet);
+      }, DEALER_FAILSAFE_MS);
 
       const resolveAfterPause = () => {
-        dealerTimeoutRef.current = setTimeout(() => {
-          dealerActiveRef.current = false;
-          finishRound(playerHand, dHand, dDeck, bet);
+        schedule(() => {
+          try {
+            finishRound(playerHand, dHand, dDeck, bet);
+          } catch {
+            const ctx = dealerCtxRef.current;
+            finishRound(ctx.playerHand, ctx.dealerHand, ctx.deck, ctx.bet);
+          }
         }, DEALER_RESOLVE_DELAY_MS);
       };
 
       const drawStep = () => {
-        if (!dealerMustHit(dHand)) {
+        if (isStale()) return;
+        try {
+          if (!dealerMustHit(dHand)) {
+            resolveAfterPause();
+            return;
+          }
+
+          const drawn = drawCard(dDeck);
+          dHand = [...dHand, drawn.card];
+          dDeck = drawn.deck;
+          dealerCtxRef.current = { playerHand, dealerHand: dHand, deck: dDeck, bet };
+          playCardDeal();
+
+          const total = handValue(dHand).total;
+          const stillHitting = dealerMustHit(dHand);
+
+          setBlackjackState((s) => ({
+            ...s,
+            playerHand,
+            dealerHand: dHand,
+            deck: dDeck,
+            gameStatus: 'dealer-turn',
+            dealerHoleHidden: false,
+            resultMessage: stillHitting
+              ? `Dealer hits… ${total}`
+              : `Dealer stands on ${total}.`,
+          }));
+
+          schedule(stillHitting ? drawStep : resolveAfterPause, DEALER_DRAW_DELAY_MS);
+        } catch {
           resolveAfterPause();
-          return;
         }
-
-        const drawn = drawCard(dDeck);
-        dHand = [...dHand, drawn.card];
-        dDeck = drawn.deck;
-        playCardDeal();
-
-        const total = handValue(dHand).total;
-        const stillHitting = dealerMustHit(dHand);
-
-        setBlackjackState((s) => ({
-          ...s,
-          playerHand,
-          dealerHand: dHand,
-          deck: dDeck,
-          gameStatus: 'dealer-turn',
-          dealerHoleHidden: false,
-          resultMessage: stillHitting
-            ? `Dealer hits… ${total}`
-            : `Dealer stands on ${total}.`,
-        }));
-
-        dealerTimeoutRef.current = setTimeout(
-          stillHitting ? drawStep : resolveAfterPause,
-          DEALER_DRAW_DELAY_MS,
-        );
       };
 
       setBlackjackState((s) => ({
@@ -1063,17 +1129,17 @@ export default function App() {
       }));
 
       if (!dealerMustHit(dHand)) {
-        dealerTimeoutRef.current = setTimeout(resolveAfterPause, DEALER_DRAW_DELAY_MS);
+        schedule(resolveAfterPause, DEALER_DRAW_DELAY_MS);
         return;
       }
 
-      dealerTimeoutRef.current = setTimeout(drawStep, DEALER_DRAW_DELAY_MS);
+      schedule(drawStep, DEALER_DRAW_DELAY_MS);
     },
-    [finishRound, clearDealerSequence],
+    [finishRound, cancelDealerTimers],
   );
 
   const placeBet = () => {
-    if (blackjackState.gameStatus !== 'betting') return;
+    if (blackjackState.gameStatus !== 'betting' || blackjackBusy) return;
     clearDealerSequence();
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
@@ -1127,7 +1193,7 @@ export default function App() {
   };
 
   const hit = () => {
-    if (blackjackState.gameStatus !== 'player-turn' || dealerActiveRef.current) return;
+    if (blackjackState.gameStatus !== 'player-turn' || blackjackBusy || dealerActiveRef.current) return;
     const bet = blackjackState.activeBet;
     let deck = [...blackjackState.deck];
     const drawn = drawCard(deck);
@@ -1136,6 +1202,7 @@ export default function App() {
     deck = drawn.deck;
     const pv = handValue(playerHand);
     if (pv.total > 21) {
+      clearDealerSequence();
       feedbackLoss(bet);
       setBlackjackState((s) => ({
         ...s,
@@ -1168,7 +1235,7 @@ export default function App() {
   };
 
   const stand = () => {
-    if (blackjackState.gameStatus !== 'player-turn' || dealerActiveRef.current) return;
+    if (blackjackState.gameStatus !== 'player-turn' || blackjackBusy || dealerActiveRef.current) return;
     setBlackjackState((s) => ({
       ...s,
       gameStatus: 'dealer-turn',
@@ -1184,7 +1251,7 @@ export default function App() {
   };
 
   const doubleDown = () => {
-    if (blackjackState.gameStatus !== 'player-turn' || dealerActiveRef.current) return;
+    if (blackjackState.gameStatus !== 'player-turn' || blackjackBusy || dealerActiveRef.current) return;
     if (blackjackState.playerHand.length !== 2) return;
     const extra = blackjackState.activeBet;
     if (playerMoney < extra) return;
@@ -1197,6 +1264,7 @@ export default function App() {
     deck = drawn.deck;
     const pv = handValue(playerHand);
     if (pv.total > 21) {
+      clearDealerSequence();
       feedbackLoss(bet);
       setBlackjackState((s) => ({
         ...s,
@@ -1308,8 +1376,8 @@ export default function App() {
   const theme = stage.theme;
   const dealerTotal = handValue(blackjackState.dealerHand).total;
   const playerTotal = handValue(blackjackState.playerHand).total;
-  const canBet = blackjackState.gameStatus === 'betting';
-  const playerTurn = blackjackState.gameStatus === 'player-turn';
+  const canBet = blackjackState.gameStatus === 'betting' && !blackjackBusy;
+  const playerTurn = blackjackState.gameStatus === 'player-turn' && !blackjackBusy;
   const dealerTurn = blackjackState.gameStatus === 'dealer-turn';
   const resolved = blackjackState.gameStatus === 'resolved';
 
@@ -1409,7 +1477,6 @@ export default function App() {
                   theme={theme}
                   cards={blackjackState.dealerHand}
                   hiddenIndex={blackjackState.dealerHoleHidden ? 1 : undefined}
-                  animateLast={dealerTurn}
                   showScore={!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0}
                   total={dealerTotal}
                 />
@@ -1417,30 +1484,32 @@ export default function App() {
                   label="Player"
                   theme={theme}
                   cards={blackjackState.playerHand}
-                  animateLast={playerTurn}
                   showScore={blackjackState.playerHand.length > 0}
                   total={playerTotal}
                 />
               </div>
 
-              <div className={`theme-transition shrink-0 pt-2 pb-2 pb-safe border-t -mx-2 px-2 mt-1 space-y-2 ${theme.actionDock}`}>
+              <div className={`theme-transition relative z-20 shrink-0 pt-2 pb-2 pb-safe border-t -mx-2 px-2 mt-1 space-y-2 ${theme.actionDock}`}>
                 {canBet && (
-                  <GoldButton theme={theme} onClick={placeBet} disabled={playerMoney < currentBet} variant="felt" action>
+                  <GoldButton theme={theme} onClick={placeBet} disabled={playerMoney < currentBet || blackjackBusy} variant="felt" action>
                     Deal · {formatMoney(currentBet)}
                   </GoldButton>
                 )}
                 {playerTurn && (
                   <>
                     <div className="grid grid-cols-2 gap-2">
-                      <GoldButton theme={theme} onClick={hit} action>Hit</GoldButton>
-                      <GoldButton theme={theme} onClick={stand} variant="secondary" action>Stand</GoldButton>
+                      <GoldButton theme={theme} onClick={hit} disabled={blackjackBusy} action>Hit</GoldButton>
+                      <GoldButton theme={theme} onClick={stand} disabled={blackjackBusy} variant="secondary" action>Stand</GoldButton>
                     </div>
                     <GoldButton
                       theme={theme}
                       onClick={doubleDown}
-                      disabled={blackjackState.playerHand.length !== 2 || playerMoney < blackjackState.activeBet}
+                      disabled={
+                        blackjackBusy ||
+                        blackjackState.playerHand.length !== 2 ||
+                        playerMoney < blackjackState.activeBet
+                      }
                       dense
-                      className="shadow-[0_0_16px_rgba(212,175,55,0.25)]"
                     >
                       Double Down
                     </GoldButton>
