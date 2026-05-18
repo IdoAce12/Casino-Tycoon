@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -78,8 +77,6 @@ interface FloatMessage {
 const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUITS: Suit[] = ['♠', '♥', '♦', '♣'];
 const DECK_COUNT = 6;
-const HIGH_RANKS: Rank[] = ['10', 'J', 'Q', 'K', 'A'];
-
 const STAGES: StageConfig[] = [
   {
     id: 0,
@@ -161,7 +158,7 @@ const UPGRADE_BASE = {
   ownership: { cost: 2500, income: 15 },
 };
 
-const REEL_CELL_H = 56;
+const SLOT_REEL_CELL_H = 76;
 const DEALER_DRAW_DELAY_MS = 1000;
 const DEALER_RESOLVE_DELAY_MS = 800;
 
@@ -298,15 +295,6 @@ function handValue(cards: Card[]): { total: number; isSoft: boolean; isBlackjack
   };
 }
 
-function isHighCard(card: Card): boolean {
-  return HIGH_RANKS.includes(card.rank);
-}
-
-function highCardPercent(deck: Card[]): number {
-  if (deck.length === 0) return 0;
-  return Math.round((deck.filter(isHighCard).length / deck.length) * 1000) / 10;
-}
-
 function cardColor(card: Card): string {
   return card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-slate-900';
 }
@@ -322,17 +310,47 @@ function buildReelStrip(symbols: [string, string, string], finalSym: string, loo
   const landIndex = strip.length - 2;
   return {
     strip,
-    targetOffset: -landIndex * REEL_CELL_H,
+    targetOffset: -landIndex * SLOT_REEL_CELL_H,
     duration: 0,
   };
 }
 
+const MONEY_TIERS: { threshold: number; suffix: string }[] = [
+  { threshold: 1e33, suffix: 'Dc' },
+  { threshold: 1e30, suffix: 'No' },
+  { threshold: 1e27, suffix: 'Oc' },
+  { threshold: 1e24, suffix: 'Sp' },
+  { threshold: 1e21, suffix: 'Sx' },
+  { threshold: 1e18, suffix: 'Qi' },
+  { threshold: 1e15, suffix: 'Qa' },
+  { threshold: 1e12, suffix: 'T' },
+  { threshold: 1e9, suffix: 'B' },
+  { threshold: 1e6, suffix: 'M' },
+];
+
+function formatScaled(value: number, decimals: number): string {
+  const fixed = value.toFixed(decimals);
+  return fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+}
+
 function formatMoney(n: number): string {
-  return n >= 1_000_000
-    ? `$${(n / 1_000_000).toFixed(2)}M`
-    : n >= 10_000
-      ? `$${(n / 1000).toFixed(1)}K`
-      : `$${Math.floor(n).toLocaleString()}`;
+  if (!Number.isFinite(n)) return '$0';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+
+  for (const { threshold, suffix } of MONEY_TIERS) {
+    if (abs >= threshold) {
+      const scaled = abs / threshold;
+      const decimals = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+      return `${sign}$${formatScaled(scaled, decimals)}${suffix}`;
+    }
+  }
+
+  if (abs >= 10_000) {
+    return `${sign}$${formatScaled(abs / 1_000, 1)}K`;
+  }
+
+  return `${sign}$${Math.floor(abs).toLocaleString()}`;
 }
 
 function getUnlockedStage(money: number): number {
@@ -391,6 +409,7 @@ function GoldButton({
   variant = 'primary',
   className = '',
   dense = false,
+  action = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -398,6 +417,7 @@ function GoldButton({
   variant?: 'primary' | 'secondary' | 'danger' | 'felt';
   className?: string;
   dense?: boolean;
+  action?: boolean;
 }) {
   const inner =
     variant === 'felt'
@@ -417,7 +437,7 @@ function GoldButton({
     >
       <span
         className={`gold-border-inner block w-full text-center font-semibold tracking-wide ${inner} ${
-          dense ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'
+          action ? 'px-4 py-4 text-base font-bold' : dense ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'
         }`}
       >
         {children}
@@ -429,26 +449,33 @@ function GoldButton({
 function PlayingCard({
   card,
   hidden = false,
-  compact = false,
+  size = 'default',
   animateIn = false,
 }: {
   card?: Card;
   hidden?: boolean;
-  compact?: boolean;
+  size?: 'compact' | 'default' | 'large';
   animateIn?: boolean;
 }) {
-  const size = compact ? 'w-11 h-[3.25rem]' : 'w-14 h-20';
-  const rankSize = compact ? 'text-sm' : 'text-lg';
-  const suitSize = compact ? 'text-xl' : 'text-2xl';
+  const sizeClass =
+    size === 'large'
+      ? 'w-[4.25rem] h-[5.75rem]'
+      : size === 'compact'
+        ? 'w-11 h-[3.25rem]'
+        : 'w-14 h-20';
+  const rankSize = size === 'large' ? 'text-xl' : size === 'compact' ? 'text-sm' : 'text-lg';
+  const suitSize = size === 'large' ? 'text-3xl' : size === 'compact' ? 'text-xl' : 'text-2xl';
+  const backInner =
+    size === 'large' ? 'w-11 h-14' : size === 'compact' ? 'w-7 h-9' : 'w-9 h-12';
   const anim = animateIn ? 'animate-card-deal' : '';
 
   if (hidden) {
     return (
       <div
-        className={`${size} rounded-xl border border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-xl ${anim}`}
+        className={`${sizeClass} rounded-xl border border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-xl ${anim}`}
       >
         <div
-          className={`${compact ? 'w-7 h-9' : 'w-9 h-12'} rounded-lg border border-gold/30 bg-gradient-to-br from-gold-dark to-gold/50`}
+          className={`${backInner} rounded-lg border border-gold/30 bg-gradient-to-br from-gold-dark to-gold/50`}
         />
       </div>
     );
@@ -457,7 +484,7 @@ function PlayingCard({
   const color = cardColor(card);
   return (
     <div
-      className={`${size} rounded-xl bg-white border border-amber-500/30 shadow-xl flex flex-col items-center justify-center gap-0.5 ${anim}`}
+      className={`${sizeClass} rounded-xl bg-white border border-amber-500/30 shadow-xl flex flex-col items-center justify-center gap-0.5 ${anim}`}
     >
       <span className={`${rankSize} font-black leading-none tracking-tight ${color}`}>{card.rank}</span>
       <span className={`${suitSize} font-black leading-none ${color}`}>{card.suit}</span>
@@ -470,11 +497,13 @@ function SlotReel({
   anim,
   spinning,
   reelIndex,
+  cellHeight,
 }: {
   displaySymbol: string;
   anim: ReelAnim | null;
   spinning: boolean;
   reelIndex: number;
+  cellHeight: number;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
@@ -500,8 +529,8 @@ function SlotReel({
 
   return (
     <div
-      className="relative flex-1 max-w-[72px] rounded-md overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)]"
-      style={{ height: REEL_CELL_H }}
+      className="relative flex-1 min-w-0 max-w-[100px] rounded-lg overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)]"
+      style={{ height: cellHeight }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
       <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent z-10 pointer-events-none" />
@@ -522,15 +551,15 @@ function SlotReel({
               <div
                 key={`${reelIndex}-${idx}`}
                 className="flex items-center justify-center select-none"
-                style={{ height: REEL_CELL_H }}
+                style={{ height: cellHeight }}
               >
-                <span className="text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]">{sym}</span>
+                <span className="text-4xl sm:text-5xl drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]">{sym}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full" style={{ height: REEL_CELL_H }}>
-            <span className="text-3xl select-none drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
+          <div className="flex items-center justify-center h-full" style={{ height: cellHeight }}>
+            <span className="text-4xl sm:text-5xl select-none drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
               {displaySymbol}
             </span>
           </div>
@@ -553,11 +582,11 @@ function SlotCabinet({
   reelAnims: [ReelAnim, ReelAnim, ReelAnim] | null;
 }) {
   return (
-    <div className="relative mx-auto max-w-[280px]">
+    <div className="relative w-full mx-auto">
       <div className="absolute -inset-1 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
-      <div className="relative rounded-2xl border-2 border-gold/40 bg-gradient-to-b from-zinc-800 via-zinc-900 to-black p-3 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)]">
-        <div className="flex items-center justify-between px-1 mb-2">
-          <span className="text-[9px] font-bold tracking-[0.25em] text-gold/70 uppercase">
+      <div className="relative rounded-2xl border-2 border-gold/40 bg-gradient-to-b from-zinc-800 via-zinc-900 to-black p-2 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="flex items-center justify-between px-2 mb-1.5">
+          <span className="text-[10px] font-bold tracking-[0.25em] text-gold/70 uppercase">
             VIP Series
           </span>
           <div className="flex gap-1">
@@ -569,8 +598,8 @@ function SlotCabinet({
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-zinc-700 bg-black p-2 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
-          <div className="flex gap-1.5 justify-center">
+        <div className="rounded-xl border border-zinc-700 bg-black p-1.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
+          <div className="flex gap-2 justify-center w-full">
             {reels.map((sym, i) => (
               <SlotReel
                 key={i}
@@ -578,11 +607,12 @@ function SlotCabinet({
                 displaySymbol={sym}
                 anim={reelAnims?.[i] ?? null}
                 spinning={spinning && reelAnims !== null}
+                cellHeight={SLOT_REEL_CELL_H}
               />
             ))}
           </div>
         </div>
-        <div className="mt-2 h-1 rounded-full bg-zinc-800 overflow-hidden">
+        <div className="mt-1.5 h-1 rounded-full bg-zinc-800 overflow-hidden">
           <div
             className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light transition-all ease-out ${spinning ? 'w-full' : 'w-0'}`}
             style={{ transitionDuration: spinning ? '2900ms' : '300ms' }}
@@ -609,12 +639,13 @@ export default function App() {
     ownership: 0,
   });
   const [stageModal, setStageModal] = useState<StageConfig | null>(null);
+  const [lifetimePeakMoney, setLifetimePeakMoney] = useState(100);
+  const [highestStageUnlockedEver, setHighestStageUnlockedEver] = useState(0);
   const [floatMessages, setFloatMessages] = useState<FloatMessage[]>([]);
   const [winFlash, setWinFlash] = useState(false);
   const [lossShake, setLossShake] = useState(false);
 
   const floatId = useRef(0);
-  const prevUnlocked = useRef(0);
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -654,19 +685,25 @@ export default function App() {
   }, [passiveIncomeRate]);
 
   useEffect(() => {
-    const unlocked = getUnlockedStage(playerMoney);
-    if (unlocked > prevUnlocked.current) {
-      setCurrentStage(unlocked);
-      setStageModal(STAGES[unlocked]);
-      setSlotsState((s) => ({
-        ...s,
-        reels: [...STAGES[unlocked].symbols],
+    setLifetimePeakMoney((peak) => (playerMoney > peak ? playerMoney : peak));
+  }, [playerMoney]);
+
+  useEffect(() => {
+    const stageFromPeak = getUnlockedStage(lifetimePeakMoney);
+    if (stageFromPeak > highestStageUnlockedEver) {
+      setHighestStageUnlockedEver(stageFromPeak);
+      setCurrentStage((s) => Math.max(s, stageFromPeak));
+      setStageModal(STAGES[stageFromPeak]);
+      setSlotsState((prev) => ({
+        ...prev,
+        reels: [...STAGES[stageFromPeak].symbols],
         slotResultMessage: 'New venue unlocked. Premium reels calibrated.',
       }));
-      if (currentBet < STAGES[unlocked].minBet) setCurrentBet(STAGES[unlocked].minBet);
+      if (currentBet < STAGES[stageFromPeak].minBet) {
+        setCurrentBet(STAGES[stageFromPeak].minBet);
+      }
     }
-    prevUnlocked.current = unlocked;
-  }, [playerMoney, currentBet]);
+  }, [lifetimePeakMoney, highestStageUnlockedEver, currentBet]);
 
   useEffect(() => {
     if (currentBet < minBet) setCurrentBet(minBet);
@@ -728,11 +765,6 @@ export default function App() {
     setUpgradesBought((u) => ({ ...u, [key]: u[key] + 1 }));
     playWinChime();
   };
-
-  const highCardPct = useMemo(
-    () => (upgradesBought.lens > 0 ? highCardPercent(blackjackState.deck) : null),
-    [upgradesBought.lens, blackjackState.deck],
-  );
 
   const resolveBlackjack = useCallback(
     (
@@ -1074,7 +1106,7 @@ export default function App() {
   };
 
   const selectStage = (idx: number) => {
-    if (playerMoney < STAGES[idx].unlockCost) return;
+    if (lifetimePeakMoney < STAGES[idx].unlockCost) return;
     setCurrentStage(idx);
     setCurrentBet(Math.max(currentBet, STAGES[idx].minBet));
     setSlotsState((s) => ({
@@ -1152,8 +1184,14 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden px-safe">
-        <div className="px-3 py-3 relative min-h-full">
+      <main className={`flex-1 min-h-0 px-safe ${currentTab === 'blackjack' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
+        <div
+          className={`relative ${
+            currentTab === 'blackjack'
+              ? 'flex flex-col flex-1 min-h-0 px-2 py-2'
+              : 'px-3 py-3 min-h-full'
+          }`}
+        >
           {floatMessages.map((fm) => (
             <div
               key={fm.id}
@@ -1169,134 +1207,104 @@ export default function App() {
           {currentTab === 'blackjack' && (
             <GlassPanel
               glow={acc.glow}
-              className={`p-2.5 ring-1 ${acc.ring} max-h-[70vh] flex flex-col min-h-0`}
+              className={`flex-1 flex flex-col min-h-0 ring-1 ${acc.ring} p-2 pb-0 overflow-hidden`}
             >
-              <div className="shrink-0">
-                <h2 className="text-center font-display text-sm font-bold text-gold-gradient">
-                  Blackjack Pro
-                </h2>
-                <p className="text-center text-[9px] text-zinc-500 tracking-widest uppercase mb-1">
-                  6-deck · Soft 17
-                </p>
-                {highCardPct !== null && (
-                  <div className="mb-1.5 px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center">
-                    <span className="text-[9px] text-emerald-400/80 uppercase tracking-wider">
-                      High Card Index
-                    </span>
-                    <p className="text-sm font-bold text-emerald-300 tabular-nums">{highCardPct}%</p>
-                  </div>
-                )}
-                <p className="text-center text-[11px] text-zinc-400 mb-1.5 min-h-[28px] leading-tight">
-                  {blackjackState.resultMessage}
-                </p>
-              </div>
+              <p className="shrink-0 text-center text-[11px] text-zinc-400 min-h-[32px] leading-snug px-1 mb-1">
+                {blackjackState.resultMessage}
+              </p>
 
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 -mx-0.5 px-0.5">
-                <div className="felt-table rounded-lg p-2 border border-felt-light/30 shadow-inner">
-                  <p className="text-[9px] uppercase tracking-widest text-gold/50 mb-1">Dealer</p>
-                  <div className="flex flex-wrap gap-1 justify-center min-h-[44px] items-center">
+              <div className="flex-1 flex flex-col gap-2 min-h-0 py-1">
+                <div className="felt-table flex-1 flex flex-col rounded-xl p-3 border border-felt-light/30 shadow-inner min-h-[88px]">
+                  <p className="text-[10px] uppercase tracking-widest text-gold/60 mb-2 text-center">Dealer</p>
+                  <div className="flex-1 flex flex-wrap gap-2 justify-center items-center content-center">
                     {blackjackState.dealerHand.map((card, i) => (
                       <PlayingCard
                         key={`d-${i}-${card.rank}${card.suit}`}
                         card={card}
                         hidden={blackjackState.dealerHoleHidden && i === 1}
-                        compact
+                        size="large"
                         animateIn={dealerTurn && i === blackjackState.dealerHand.length - 1}
                       />
                     ))}
                   </div>
                   {!blackjackState.dealerHoleHidden && blackjackState.dealerHand.length > 0 && (
-                    <p className="text-center text-[10px] text-gold/70 mt-1 tabular-nums">
+                    <p className="text-center text-sm text-gold/80 mt-2 tabular-nums font-semibold">
                       {handValue(blackjackState.dealerHand).total}
                     </p>
                   )}
                 </div>
 
-                <div className="felt-table rounded-lg p-2 border border-felt-light/30 shadow-inner">
-                  <p className="text-[9px] uppercase tracking-widest text-gold/50 mb-1">Player</p>
-                  <div className="flex flex-wrap gap-1 justify-center min-h-[44px] items-center">
+                <div className="felt-table flex-1 flex flex-col rounded-xl p-3 border border-felt-light/30 shadow-inner min-h-[88px]">
+                  <p className="text-[10px] uppercase tracking-widest text-gold/60 mb-2 text-center">Player</p>
+                  <div className="flex-1 flex flex-wrap gap-2 justify-center items-center content-center">
                     {blackjackState.playerHand.map((card, i) => (
                       <PlayingCard
                         key={`p-${i}-${card.rank}${card.suit}`}
                         card={card}
-                        compact
+                        size="large"
                         animateIn={playerTurn && i === blackjackState.playerHand.length - 1}
                       />
                     ))}
                   </div>
                   {blackjackState.playerHand.length > 0 && (
-                    <p className="text-center text-xs font-bold text-gold-light mt-1 tabular-nums">
+                    <p className="text-center text-base font-bold text-gold-light mt-2 tabular-nums">
                       {handValue(blackjackState.playerHand).total}
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="shrink-0 pt-1.5 space-y-1">
+              <div className="shrink-0 pt-2 pb-2 pb-safe border-t border-white/10 bg-black/50 -mx-2 px-2 mt-1 space-y-2">
                 {canBet && (
-                  <GoldButton
-                    onClick={placeBet}
-                    disabled={playerMoney < currentBet}
-                    variant="felt"
-                    dense
-                  >
+                  <GoldButton onClick={placeBet} disabled={playerMoney < currentBet} variant="felt" action>
                     Deal · {formatMoney(currentBet)}
                   </GoldButton>
                 )}
                 {playerTurn && (
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <GoldButton onClick={hit} dense>
-                      Hit
-                    </GoldButton>
-                    <GoldButton onClick={stand} variant="secondary" dense>
-                      Stand
-                    </GoldButton>
-                    <div className="col-span-2">
-                      <GoldButton
-                        onClick={doubleDown}
-                        disabled={
-                          blackjackState.playerHand.length !== 2 ||
-                          playerMoney < blackjackState.activeBet
-                        }
-                        dense
-                        className="shadow-[0_0_16px_rgba(212,175,55,0.2)]"
-                      >
-                        Double Down
-                      </GoldButton>
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <GoldButton onClick={hit} action>Hit</GoldButton>
+                      <GoldButton onClick={stand} variant="secondary" action>Stand</GoldButton>
                     </div>
-                  </div>
+                    <GoldButton
+                      onClick={doubleDown}
+                      disabled={blackjackState.playerHand.length !== 2 || playerMoney < blackjackState.activeBet}
+                      dense
+                      className="shadow-[0_0_16px_rgba(212,175,55,0.25)]"
+                    >
+                      Double Down
+                    </GoldButton>
+                  </>
                 )}
                 {dealerTurn && (
-                  <p className="text-center text-[10px] text-gold/60 py-1 animate-pulse">
-                    Dealer drawing…
-                  </p>
+                  <p className="text-center text-xs text-gold/70 py-2 animate-pulse font-medium">Dealer drawing…</p>
                 )}
                 {resolved && (
-                  <GoldButton onClick={newHand} variant="secondary" dense>
-                    New Hand
-                  </GoldButton>
+                  <GoldButton onClick={newHand} variant="secondary" action>New Hand</GoldButton>
                 )}
               </div>
             </GlassPanel>
           )}
 
-{currentTab === 'slots' && (
-            <GlassPanel glow={acc.glow} className={`p-4 ring-1 ${acc.ring}`}>
-              <h2 className="text-center font-display text-base font-bold text-gold-gradient mb-1">
-                Signature Slots
-              </h2>
-              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-4">
-                Professional cabinet · 3-reel
+          {currentTab === 'slots' && (
+            <GlassPanel
+              glow={acc.glow}
+              className={`p-2 ring-1 ${acc.ring} flex flex-col flex-1 min-h-0`}
+            >
+              <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-2 shrink-0">
+                VIP · 3-reel
               </p>
-              <SlotCabinet
+              <div className="flex-1 flex items-center min-h-0 py-1">
+                <SlotCabinet
                 reels={slotsState.reels}
                 spinning={slotsState.isSpinning}
                 reelAnims={slotsState.reelAnims}
-              />
-              <p className="text-center text-sm text-zinc-400 mt-4 mb-2 min-h-[40px]">
+                />
+              </div>
+              <p className="text-center text-xs text-zinc-400 mt-2 mb-1 min-h-[32px] shrink-0">
                 {slotsState.slotResultMessage}
               </p>
-              <p className="text-center text-[10px] text-zinc-600 mb-4">
+              <p className="text-center text-[10px] text-zinc-600 mb-2 shrink-0">
                 Triple 10× · Pair 2×
               </p>
               <GoldButton
@@ -1334,7 +1342,7 @@ export default function App() {
                   {
                     key: 'lens' as UpgradeKey,
                     name: stage.shopNames.lens,
-                    desc: 'Displays high-card percentage in shoe',
+                    desc: 'Insider table intel — sharpens long-term edge',
                     tier: 'premium' as const,
                   },
                   {
@@ -1391,7 +1399,7 @@ export default function App() {
               <GlassPanel className="p-4">
                 <h3 className="text-xs uppercase tracking-widest text-gold/60 mb-3">Venues</h3>
                 {STAGES.map((s, idx) => {
-                  const unlocked = playerMoney >= s.unlockCost;
+                  const unlocked = lifetimePeakMoney >= s.unlockCost;
                   const active = currentStage === idx;
                   return (
                     <button
