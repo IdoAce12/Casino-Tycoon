@@ -1,0 +1,16 @@
+{
+  "short_name": "CasinoTycoon",
+  "name": "Casino Tycoon: Lone Empire",
+  "icons": [
+    {
+      "src": "https://api.iconify.design/fluent-emoji:slot-machine.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0B0C10",
+  "theme_color": "#D4AF37",
+  "display": "standalone",
+  "orientation": "portrait"
+}

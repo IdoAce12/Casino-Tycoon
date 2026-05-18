@@ -31,10 +31,17 @@ interface BlackjackState {
   dealerHoleHidden: boolean;
 }
 
+interface ReelAnim {
+  strip: string[];
+  targetOffset: number;
+  duration: number;
+}
+
 interface SlotsState {
   reels: [string, string, string];
   isSpinning: boolean;
   slotResultMessage: string;
+  reelAnims: [ReelAnim, ReelAnim, ReelAnim] | null;
 }
 
 interface UpgradesBought {
@@ -153,6 +160,8 @@ const UPGRADE_BASE = {
   lens: { cost: 350 },
   ownership: { cost: 2500, income: 15 },
 };
+
+const REEL_CELL_H = 56;
 
 // ─── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -292,7 +301,23 @@ function highCardPercent(deck: Card[]): number {
 }
 
 function cardColor(card: Card): string {
-  return card.suit === '♥' || card.suit === '♦' ? 'text-red-400' : 'text-zinc-100';
+  return card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-slate-900';
+}
+
+function buildReelStrip(symbols: [string, string, string], finalSym: string, loops: number): ReelAnim {
+  const strip: string[] = [];
+  for (let loop = 0; loop < loops; loop++) {
+    for (const s of symbols) strip.push(s);
+  }
+  for (let i = 0; i < 3; i++) strip.push(symbols[Math.floor(Math.random() * 3)]);
+  strip.push(finalSym);
+  strip.push(symbols[Math.floor(Math.random() * 3)]);
+  const landIndex = strip.length - 2;
+  return {
+    strip,
+    targetOffset: -landIndex * REEL_CELL_H,
+    duration: 0,
+  };
 }
 
 function formatMoney(n: number): string {
@@ -332,6 +357,7 @@ function initialSlots(symbols: [string, string, string]): SlotsState {
     reels: [...symbols],
     isSpinning: false,
     slotResultMessage: 'Adjust wager and initiate spin sequence.',
+    reelAnims: null,
   };
 }
 
@@ -398,16 +424,95 @@ function PlayingCard({
 }) {
   if (hidden) {
     return (
-      <div className="w-11 h-[3.6rem] rounded-lg border border-gold/30 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-lg">
-        <div className="w-7 h-9 rounded border border-gold/20 bg-gradient-to-br from-gold-dark to-gold/40 opacity-60" />
+      <div className="w-14 h-20 rounded-xl border border-amber-500/40 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center shadow-xl">
+        <div className="w-9 h-12 rounded-lg border border-gold/30 bg-gradient-to-br from-gold-dark to-gold/50" />
       </div>
     );
   }
   if (!card) return null;
+  const color = cardColor(card);
   return (
-    <div className="w-11 h-[3.6rem] rounded-lg border border-white/20 bg-gradient-to-b from-zinc-100 to-zinc-300 flex flex-col items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-      <span className={`text-xs font-bold leading-none ${cardColor(card)}`}>{card.rank}</span>
-      <span className={`text-sm leading-none ${cardColor(card)}`}>{card.suit}</span>
+    <div className="w-14 h-20 rounded-xl bg-white border border-amber-500/30 shadow-xl flex flex-col items-center justify-center gap-0.5">
+      <span className={`text-lg font-black leading-none tracking-tight ${color}`}>{card.rank}</span>
+      <span className={`text-2xl font-black leading-none ${color}`}>{card.suit}</span>
+    </div>
+  );
+}
+
+function SlotReel({
+  displaySymbol,
+  anim,
+  spinning,
+  reelIndex,
+}: {
+  displaySymbol: string;
+  anim: ReelAnim | null;
+  spinning: boolean;
+  reelIndex: number;
+}) {
+  const [offset, setOffset] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (!anim || !spinning) {
+      setOffset(0);
+      setTransitioning(false);
+      return;
+    }
+    setOffset(0);
+    setTransitioning(false);
+    const startId = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTransitioning(true);
+        setOffset(anim.targetOffset);
+      });
+    });
+    return () => cancelAnimationFrame(startId);
+  }, [anim, spinning]);
+
+  const duration = anim?.duration ?? 2.2;
+
+  return (
+    <div
+      className="relative flex-1 max-w-[72px] rounded-md overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)]"
+      style={{ height: REEL_CELL_H }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
+      <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-gold/30 z-20 pointer-events-none" />
+      <div className="absolute inset-0 overflow-hidden">
+        {anim && spinning ? (
+          <div
+            className="reel-strip"
+            style={{
+              transform: `translate3d(0, ${offset}px, 0)`,
+              transition: transitioning
+                ? `transform ${duration}s cubic-bezier(0.12, 0.75, 0.18, 1)`
+                : 'none',
+            }}
+          >
+            {anim.strip.map((sym, idx) => (
+              <div
+                key={`${reelIndex}-${idx}`}
+                className="flex items-center justify-center select-none"
+                style={{ height: REEL_CELL_H }}
+              >
+                <span className="text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]">{sym}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full" style={{ height: REEL_CELL_H }}>
+            <span className="text-3xl select-none drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
+              {displaySymbol}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="absolute bottom-1 inset-x-0 flex justify-center z-10 pointer-events-none">
+        <span className="text-[7px] text-zinc-600 font-mono tracking-widest">REEL {reelIndex + 1}</span>
+      </div>
     </div>
   );
 }
@@ -415,9 +520,11 @@ function PlayingCard({
 function SlotCabinet({
   reels,
   spinning,
+  reelAnims,
 }: {
   reels: [string, string, string];
   spinning: boolean;
+  reelAnims: [ReelAnim, ReelAnim, ReelAnim] | null;
 }) {
   return (
     <div className="relative mx-auto max-w-[280px]">
@@ -439,39 +546,20 @@ function SlotCabinet({
         <div className="rounded-xl border border-zinc-700 bg-black p-2 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
           <div className="flex gap-1.5 justify-center">
             {reels.map((sym, i) => (
-              <div
+              <SlotReel
                 key={i}
-                className={`relative flex-1 max-w-[72px] aspect-[3/4] rounded-md overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)] ${
-                  spinning ? 'animate-reel-blur' : ''
-                }`}
-              >
-                <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
-                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/8 to-transparent z-10 pointer-events-none" />
-                <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
-                <div
-                  className={`absolute inset-x-0 h-[2px] bg-gold/20 z-20 ${spinning ? 'animate-scanline' : 'top-1/2 -translate-y-1/2'}`}
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span
-                    className={`text-3xl select-none drop-shadow-[0_0_8px_rgba(212,175,55,0.3)] ${
-                      spinning ? 'scale-110' : ''
-                    } transition-transform`}
-                  >
-                    {sym}
-                  </span>
-                </div>
-                <div className="absolute bottom-1 inset-x-0 flex justify-center z-10">
-                  <span className="text-[7px] text-zinc-600 font-mono tracking-widest">
-                    REEL {i + 1}
-                  </span>
-                </div>
-              </div>
+                reelIndex={i}
+                displaySymbol={sym}
+                anim={reelAnims?.[i] ?? null}
+                spinning={spinning && reelAnims !== null}
+              />
             ))}
           </div>
         </div>
         <div className="mt-2 h-1 rounded-full bg-zinc-800 overflow-hidden">
           <div
-            className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light ${spinning ? 'animate-shimmer bg-[length:200%_100%] w-full' : 'w-0'} transition-all duration-300`}
+            className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light transition-all ease-out ${spinning ? 'w-full' : 'w-0'}`}
+            style={{ transitionDuration: spinning ? '2900ms' : '300ms' }}
           />
         </div>
       </div>
@@ -501,8 +589,8 @@ export default function App() {
 
   const floatId = useRef(0);
   const prevUnlocked = useRef(0);
-  const slotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stage = STAGES[currentStage];
   const minBet = stage.minBet;
@@ -512,7 +600,7 @@ export default function App() {
     if (!link) {
       const m = document.createElement('link');
       m.rel = 'manifest';
-      m.href = '/manifest.webmanifest';
+      m.href = '/manifest.json';
       document.head.appendChild(m);
     }
     document.documentElement.style.setProperty('--sat', 'env(safe-area-inset-top)');
@@ -558,8 +646,8 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (slotIntervalRef.current) clearInterval(slotIntervalRef.current);
       if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
+      if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
     };
   }, []);
 
@@ -844,56 +932,70 @@ export default function App() {
     if (slotsState.isSpinning) return;
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
-    setPlayerMoney((m) => m - bet);
-    setSlotsState((s) => ({ ...s, isSpinning: true, slotResultMessage: 'Reels engaged…' }));
-    slotSpinSoundRef.current = setInterval(() => playSlotClick(), 80);
+
     const symbols = stage.symbols;
-    let ticks = 0;
-    slotIntervalRef.current = setInterval(() => {
-      ticks++;
-      setSlotsState((s) => ({
-        ...s,
-        reels: [
-          symbols[Math.floor(Math.random() * 3)],
-          symbols[Math.floor(Math.random() * 3)],
-          symbols[Math.floor(Math.random() * 3)],
-        ],
-      }));
-      if (ticks >= 19) {
-        if (slotIntervalRef.current) clearInterval(slotIntervalRef.current);
-        if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
-        const final: [string, string, string] = [
-          symbols[Math.floor(Math.random() * 3)],
-          symbols[Math.floor(Math.random() * 3)],
-          symbols[Math.floor(Math.random() * 3)],
-        ];
-        const [a, b, c] = final;
-        let payout = 0;
-        let msg = 'No match. Wager forfeited.';
-        if (a === b && b === c) {
-          payout = bet * 10;
-          msg = `JACKPOT — Triple match. ${formatMoney(payout)}`;
-        } else if (a === b || b === c || a === c) {
-          payout = bet * 2;
-          msg = `Pair payout. ${formatMoney(payout)}`;
-        }
-        const net = payout - bet;
-        if (net > 0) {
-          feedbackWin(net);
-          setPlayerMoney((m) => m + payout);
-        } else {
-          feedbackLoss(bet);
-        }
-        setSlotsState({ reels: final, isSpinning: false, slotResultMessage: msg });
+    const final: [string, string, string] = [
+      symbols[Math.floor(Math.random() * 3)],
+      symbols[Math.floor(Math.random() * 3)],
+      symbols[Math.floor(Math.random() * 3)],
+    ];
+    const durations = [2.1, 2.5, 2.9] as const;
+    const reelAnims: [ReelAnim, ReelAnim, ReelAnim] = final.map((sym, i) => {
+      const base = buildReelStrip(symbols, sym, 7 + i * 2);
+      return { ...base, duration: durations[i] };
+    }) as [ReelAnim, ReelAnim, ReelAnim];
+
+    setPlayerMoney((m) => m - bet);
+    setSlotsState({
+      reels: final,
+      isSpinning: true,
+      reelAnims,
+      slotResultMessage: 'Reels engaged…',
+    });
+
+    slotSpinSoundRef.current = setInterval(() => playSlotClick(), 120);
+
+    const maxMs = Math.max(...durations) * 1000 + 150;
+    if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
+    slotSpinEndRef.current = setTimeout(() => {
+      if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
+
+      const [a, b, c] = final;
+      let payout = 0;
+      let msg = 'No match. Wager forfeited.';
+      if (a === b && b === c) {
+        payout = bet * 10;
+        msg = `JACKPOT — Triple match. ${formatMoney(payout)}`;
+      } else if (a === b || b === c || a === c) {
+        payout = bet * 2;
+        msg = `Pair payout. ${formatMoney(payout)}`;
       }
-    }, 79);
+      const net = payout - bet;
+      if (net > 0) {
+        feedbackWin(net);
+        setPlayerMoney((m) => m + payout);
+      } else {
+        feedbackLoss(bet);
+      }
+      setSlotsState({
+        reels: final,
+        isSpinning: false,
+        reelAnims: null,
+        slotResultMessage: msg,
+      });
+    }, maxMs);
   };
 
   const selectStage = (idx: number) => {
     if (playerMoney < STAGES[idx].unlockCost) return;
     setCurrentStage(idx);
     setCurrentBet(Math.max(currentBet, STAGES[idx].minBet));
-    setSlotsState((s) => ({ ...s, reels: [...STAGES[idx].symbols] }));
+    setSlotsState((s) => ({
+      ...s,
+      reels: [...STAGES[idx].symbols],
+      reelAnims: null,
+      isSpinning: false,
+    }));
   };
 
   const acc = stage.accent;
@@ -1074,7 +1176,11 @@ export default function App() {
               <p className="text-center text-[10px] text-zinc-500 tracking-widest uppercase mb-4">
                 Professional cabinet · 3-reel
               </p>
-              <SlotCabinet reels={slotsState.reels} spinning={slotsState.isSpinning} />
+              <SlotCabinet
+                reels={slotsState.reels}
+                spinning={slotsState.isSpinning}
+                reelAnims={slotsState.reelAnims}
+              />
               <p className="text-center text-sm text-zinc-400 mt-4 mb-2 min-h-[40px]">
                 {slotsState.slotResultMessage}
               </p>

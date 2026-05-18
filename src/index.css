@@ -57,4 +57,9 @@ body,
   .text-gold-gradient {
     @apply bg-gradient-to-r from-gold-light via-gold to-gold-dark bg-clip-text text-transparent;
   }
+
+  .reel-strip {
+    will-change: transform;
+    backface-visibility: hidden;
+  }
 }
