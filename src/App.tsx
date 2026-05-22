@@ -38,12 +38,28 @@ interface ColumnAnim {
 
 type SlotGrid = [string, string, string, string, string][];
 
+type InfernoPhase = 'idle' | 'ignite' | 'burn' | 'cascade';
+
+interface SlotWin {
+  lineIndex: number;
+  count: 3 | 4 | 5;
+  coords: [number, number][];
+  payout: number;
+  symbol: string;
+}
+
 interface SlotsState {
   grid: SlotGrid;
   isSpinning: boolean;
   slotResultMessage: string;
   columnAnims: ColumnAnim[] | null;
   stoppedColumns: number;
+  activeWins: SlotWin[];
+  infernoPhase: InfernoPhase;
+  burningCells: string[];
+  cascadeFresh: string[];
+  cascadeChain: number;
+  pendingBet: number;
 }
 
 interface UpgradesBought {
@@ -99,6 +115,7 @@ interface FloatMessage {
   id: number;
   text: string;
   positive: boolean;
+  fiery?: boolean;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -346,6 +363,14 @@ const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
 
 const PAYLINE_MULTIPLIERS: Record<3 | 4 | 5, number> = { 3: 2, 4: 5, 5: 25 };
 
+const LEGEND_PAYLINES: { name: string; coords: ReadonlyArray<[number, number]> }[] = [
+  { name: 'Row 1', coords: PAYLINES[0] },
+  { name: 'Row 2', coords: PAYLINES[1] },
+  { name: 'Row 3', coords: PAYLINES[2] },
+  { name: 'V', coords: PAYLINES[3] },
+  { name: 'Inv V', coords: PAYLINES[4] },
+];
+
 const UPGRADE_BASE = {
   hustler: { cost: 75, income: 2 },
   ownership: { cost: 2500, income: 15 },
@@ -356,6 +381,14 @@ const UPGRADE_BASE = {
 
 const OFFSHORE_PASSIVE_MULT = 2.5;
 const COLUMN_STOP_STAGGER_MS = 420;
+const INFERNO_MIN_MATCH = 4;
+const INFERNO_IGNITE_MS = 700;
+const INFERNO_BURN_MS = 900;
+const INFERNO_CASCADE_MS = 700;
+const MAX_CASCADE_CHAINS = 8;
+const MEGA_WIN_MULT = 10;
+const PASSIVE_HEAT_T = 1e12;
+const PASSIVE_HEAT_QA = 1e15;
 const DEALER_DRAW_DELAY_MS = 1000;
 const DEALER_RESOLVE_DELAY_MS = 800;
 const DEALER_FAILSAFE_MS = 20000;
@@ -531,32 +564,74 @@ function countPaylineMatch(symbols: string[]): number {
   return count >= 3 ? count : 0;
 }
 
-function evaluateSlotWins(grid: SlotGrid, bet: number): { payout: number; summary: string } {
+function evaluateSlotWinsDetailed(
+  grid: SlotGrid,
+  bet: number,
+): { payout: number; summary: string; wins: SlotWin[] } {
+  const slotWins: SlotWin[] = [];
   let totalPayout = 0;
-  const wins: string[] = [];
+  const lines: string[] = [];
 
   for (let i = 0; i < PAYLINES.length; i++) {
     const line = PAYLINES[i];
     const symbols = line.map(([r, c]) => grid[r][c]);
     const count = countPaylineMatch(symbols);
     if (count >= 3) {
-      const mult = PAYLINE_MULTIPLIERS[count as 3 | 4 | 5];
+      const matchCount = count as 3 | 4 | 5;
+      const mult = PAYLINE_MULTIPLIERS[matchCount];
       const linePayout = bet * mult;
       totalPayout += linePayout;
+      const coords = line.slice(0, count) as [number, number][];
+      slotWins.push({
+        lineIndex: i,
+        count: matchCount,
+        coords,
+        payout: linePayout,
+        symbol: symbols[0],
+      });
       const label = count === 5 ? 'JACKPOT' : `${count}×`;
-      wins.push(`Line ${i + 1}: ${label} ${symbols[0]} → ${formatMoney(linePayout)}`);
+      lines.push(`Line ${i + 1}: ${label} ${symbols[0]} → ${formatMoney(linePayout)}`);
     }
   }
 
   if (totalPayout === 0) {
-    return { payout: 0, summary: 'No payline hits. Wager forfeited.' };
+    return { payout: 0, summary: 'No payline hits. Wager forfeited.', wins: [] };
   }
 
   const headline =
-    wins.length === 1
-      ? wins[0]
-      : `${wins.length} paylines · ${formatMoney(totalPayout)} total`;
-  return { payout: totalPayout, summary: headline };
+    lines.length === 1 ? lines[0] : `${lines.length} paylines · ${formatMoney(totalPayout)} total`;
+  return { payout: totalPayout, summary: headline, wins: slotWins };
+}
+
+function getInfernoBurnCells(wins: SlotWin[]): string[] {
+  const keys = new Set<string>();
+  for (const w of wins) {
+    if (w.count >= INFERNO_MIN_MATCH) {
+      for (const [r, c] of w.coords) keys.add(`${r},${c}`);
+    }
+  }
+  return [...keys];
+}
+
+function cascadeGrid(grid: SlotGrid, cellsToRemove: string[]): SlotGrid {
+  const removeSet = new Set(cellsToRemove);
+  const newGrid = grid.map((row) => [...row]) as SlotGrid;
+  for (let col = 0; col < SLOT_COLS; col++) {
+    const kept: string[] = [];
+    for (let row = 0; row < SLOT_ROWS; row++) {
+      if (!removeSet.has(`${row},${col}`)) kept.push(grid[row][col]);
+    }
+    const incoming = Array.from({ length: SLOT_ROWS - kept.length }, () => randomSlotSymbol());
+    const column = [...incoming, ...kept];
+    for (let row = 0; row < SLOT_ROWS; row++) newGrid[row][col] = column[row];
+  }
+  return newGrid;
+}
+
+function getHeatGlowClass(passiveRate: number): string {
+  if (passiveRate >= PASSIVE_HEAT_QA) return 'animate-heat-glow-qa rounded-none';
+  if (passiveRate >= PASSIVE_HEAT_T) return 'animate-heat-glow-t rounded-none';
+  return '';
 }
 
 const MONEY_TIERS: { threshold: number; suffix: string }[] = [
@@ -628,6 +703,12 @@ function initialSlots(): SlotsState {
     slotResultMessage: 'Adjust wager and initiate spin sequence.',
     columnAnims: null,
     stoppedColumns: SLOT_COLS,
+    activeWins: [],
+    infernoPhase: 'idle',
+    burningCells: [],
+    cascadeFresh: [],
+    cascadeChain: 0,
+    pendingBet: 0,
   };
 }
 
@@ -662,6 +743,7 @@ function GoldButton({
   className = '',
   dense = false,
   action = false,
+  acquired = false,
 }: {
   theme: StageTheme;
   children: ReactNode;
@@ -671,6 +753,7 @@ function GoldButton({
   className?: string;
   dense?: boolean;
   action?: boolean;
+  acquired?: boolean;
 }) {
   const inner =
     variant === 'felt'
@@ -681,15 +764,22 @@ function GoldButton({
           ? theme.btnSecondary
           : theme.btnPrimary;
 
+  const wrapClass = acquired
+    ? 'inferno-brand-wrap animate-inferno-brand-pulse pointer-events-none'
+    : `${theme.btnWrap} ${theme.btnGlow}`;
+  const innerClass = acquired ? 'inferno-brand-inner' : inner;
+
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`theme-transition rounded-xl p-[1px] w-full btn-premium disabled:opacity-35 disabled:pointer-events-none ${theme.btnWrap} ${theme.btnGlow} ${className}`}
+      className={`theme-transition rounded-xl p-[1px] w-full btn-premium ${
+        acquired ? '' : 'disabled:opacity-35'
+      } disabled:pointer-events-none ${wrapClass} ${className}`}
     >
       <span
-        className={`theme-transition block w-full rounded-[11px] text-center font-semibold tracking-wide ${inner} ${
+        className={`theme-transition block w-full rounded-[11px] text-center font-semibold tracking-wide ${innerClass} ${
           action ? 'px-4 py-4 text-base font-bold' : dense ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'
         }`}
       >
@@ -717,6 +807,7 @@ function HandArea({
   hiddenIndex,
   showScore,
   total,
+  cardsOnFire,
 }: {
   label: string;
   theme: StageTheme;
@@ -724,6 +815,7 @@ function HandArea({
   hiddenIndex?: number;
   showScore: boolean;
   total: number;
+  cardsOnFire?: boolean;
 }) {
   return (
     <div
@@ -741,6 +833,7 @@ function HandArea({
             hidden={hiddenIndex === i}
             size="large"
             theme={theme}
+            onFire={cardsOnFire && hiddenIndex !== i}
           />
         ))}
       </div>
@@ -753,11 +846,13 @@ function PlayingCard({
   hidden = false,
   size = 'default',
   theme,
+  onFire = false,
 }: {
   card?: Card;
   hidden?: boolean;
   size?: 'compact' | 'default' | 'large';
   theme?: StageTheme;
+  onFire?: boolean;
 }) {
   const [dealAnim, setDealAnim] = useState(true);
   const sizeClass =
@@ -795,10 +890,127 @@ function PlayingCard({
   const color = cardColor(card);
   return (
     <div
-      className={`${sizeClass} rounded-xl bg-white border border-amber-500/30 shadow-xl flex flex-col items-center justify-center gap-0.5 ${anim}`}
+      className={`relative ${sizeClass} rounded-xl bg-white border shadow-xl flex flex-col items-center justify-center gap-0.5 ${anim} ${
+        onFire
+          ? 'border-orange-500/80 animate-card-inferno'
+          : 'border-amber-500/30'
+      }`}
     >
-      <span className={`${rankSize} font-black leading-none tracking-tight ${color}`}>{card.rank}</span>
-      <span className={`${suitSize} font-black leading-none ${color}`}>{card.suit}</span>
+      {onFire && (
+        <div
+          className="absolute -inset-1 rounded-xl pointer-events-none z-10 bg-gradient-to-t from-orange-600/50 via-red-500/25 to-transparent animate-pulse"
+          aria-hidden
+        />
+      )}
+      <span className={`relative z-20 ${rankSize} font-black leading-none tracking-tight ${color}`}>
+        {card.rank}
+      </span>
+      <span className={`relative z-20 ${suitSize} font-black leading-none ${color}`}>{card.suit}</span>
+    </div>
+  );
+}
+
+function cellCenterPct(row: number, col: number): { x: number; y: number } {
+  return { x: ((col + 0.5) / SLOT_COLS) * 100, y: ((row + 0.5) / SLOT_ROWS) * 100 };
+}
+
+function PaylineOverlay({
+  wins,
+  infernoPhase,
+  highlightInferno,
+}: {
+  wins: SlotWin[];
+  infernoPhase: InfernoPhase;
+  highlightInferno: boolean;
+}) {
+  if (wins.length === 0) return null;
+  const infernoActive = highlightInferno && infernoPhase !== 'idle';
+
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none z-30"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="infernoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#ff2200" />
+          <stop offset="45%" stopColor="#ff9500" />
+          <stop offset="100%" stopColor="#ffcc00" />
+        </linearGradient>
+        <filter id="infernoGlow">
+          <feGaussianBlur stdDeviation="1.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {wins.map((win) => {
+        const pts = win.coords.map(([r, c]) => {
+          const { x, y } = cellCenterPct(r, c);
+          return `${x},${y}`;
+        });
+        const isInfernoLine = win.count >= INFERNO_MIN_MATCH;
+        return (
+          <polyline
+            key={`line-${win.lineIndex}-${win.count}`}
+            points={pts.join(' ')}
+            fill="none"
+            stroke="url(#infernoGrad)"
+            strokeWidth={infernoActive && isInfernoLine ? 3.2 : 2.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#infernoGlow)"
+            className={
+              infernoActive && isInfernoLine
+                ? 'animate-inferno-line'
+                : infernoPhase === 'ignite'
+                  ? 'animate-inferno-line opacity-90'
+                  : 'opacity-80'
+            }
+            style={{ vectorEffect: 'non-scaling-stroke' } as React.CSSProperties}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function PaylineLegend() {
+  return (
+    <div className="mt-2 px-1">
+      <p className="text-[8px] text-zinc-500 tracking-widest uppercase text-center mb-1.5">
+        Payline Guide
+      </p>
+      <div className="flex flex-wrap justify-center gap-2">
+        {LEGEND_PAYLINES.map((item) => (
+          <div
+            key={item.name}
+            className="flex flex-col items-center gap-0.5 bg-zinc-900/80 rounded-lg px-1.5 py-1 border border-zinc-700/60"
+          >
+            <svg viewBox="0 0 50 30" className="w-12 h-7" aria-hidden>
+              <polyline
+                points={item.coords
+                  .map(([r, c]) => `${((c + 0.5) / 5) * 50},${((r + 0.5) / 3) * 30}`)
+                  .join(' ')}
+                className="payline-legend-line"
+              />
+              {item.coords.map(([r, c]) => (
+                <circle
+                  key={`${r}-${c}`}
+                  cx={((c + 0.5) / 5) * 50}
+                  cy={((r + 0.5) / 3) * 30}
+                  r={1.8}
+                  fill="rgba(255, 160, 0, 0.7)"
+                />
+              ))}
+            </svg>
+            <span className="text-[7px] text-zinc-500 font-medium">{item.name}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -809,12 +1021,16 @@ function SlotColumn({
   spinning,
   columnIndex,
   stopped,
+  burningCells,
+  cascadeFresh,
 }: {
   columnSymbols: [string, string, string];
   anim: ColumnAnim | null;
   spinning: boolean;
   columnIndex: number;
   stopped: boolean;
+  burningCells: Set<string>;
+  cascadeFresh: Set<string>;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
@@ -872,15 +1088,26 @@ function SlotColumn({
           </div>
         ) : (
           <div className="flex flex-col">
-            {columnSymbols.map((sym, row) => (
-              <div
-                key={`${columnIndex}-${row}`}
-                className="flex items-center justify-center select-none"
-                style={{ height: SLOT_CELL_H }}
-              >
-                <span className="text-2xl sm:text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">{sym}</span>
-              </div>
-            ))}
+            {columnSymbols.map((sym, row) => {
+              const cellKey = `${row},${columnIndex}`;
+              const burning = burningCells.has(cellKey);
+              const fresh = cascadeFresh.has(cellKey);
+              return (
+                <div
+                  key={`${columnIndex}-${row}`}
+                  className={`flex items-center justify-center select-none relative ${
+                    burning ? 'slot-cell-burning animate-inferno-burn' : ''
+                  } ${fresh ? 'animate-cascade-drop' : ''}`}
+                  style={{ height: SLOT_CELL_H }}
+                >
+                  {!burning && (
+                    <span className="text-2xl sm:text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
+                      {sym}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -897,13 +1124,24 @@ function SlotMatrix({
   spinning,
   columnAnims,
   stoppedColumns,
+  activeWins,
+  infernoPhase,
+  burningCells,
+  cascadeFresh,
 }: {
   theme: StageTheme;
   grid: SlotGrid;
   spinning: boolean;
   columnAnims: ColumnAnim[] | null;
   stoppedColumns: number;
+  activeWins: SlotWin[];
+  infernoPhase: InfernoPhase;
+  burningCells: string[];
+  cascadeFresh: string[];
 }) {
+  const burnSet = new Set(burningCells);
+  const freshSet = new Set(cascadeFresh);
+  const hasInfernoWin = activeWins.some((w) => w.count >= INFERNO_MIN_MATCH);
   const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
     [grid[0][col], grid[1][col], grid[2][col]] as [string, string, string],
   );
@@ -933,8 +1171,8 @@ function SlotMatrix({
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-zinc-700 bg-black p-1.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
-          <div className="flex gap-1 justify-center w-full">
+        <div className="relative rounded-xl border border-zinc-700 bg-black p-1.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
+          <div className="flex gap-1 justify-center w-full relative">
             {columns.map((colSyms, i) => (
               <SlotColumn
                 key={i}
@@ -943,13 +1181,23 @@ function SlotMatrix({
                 anim={columnAnims?.[i] ?? null}
                 spinning={spinning && columnAnims !== null}
                 stopped={!spinning || i < stoppedColumns}
+                burningCells={burnSet}
+                cascadeFresh={freshSet}
               />
             ))}
           </div>
+          {!spinning && activeWins.length > 0 && (
+            <PaylineOverlay
+              wins={activeWins}
+              infernoPhase={infernoPhase}
+              highlightInferno={hasInfernoWin}
+            />
+          )}
         </div>
-        <div className="mt-1.5 flex justify-between px-1">
+        <PaylineLegend />
+        <div className="mt-1 flex justify-between px-1">
           <span className="text-[8px] text-zinc-600 tracking-wider">9 PAYLINES</span>
-          <span className="text-[8px] text-zinc-600 tracking-wider">3×2×5×25×</span>
+          <span className="text-[8px] text-zinc-600 tracking-wider">4+ INFERNO CASCADE</span>
         </div>
         <div className="mt-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
           <div
@@ -985,11 +1233,14 @@ export default function App() {
   const [floatMessages, setFloatMessages] = useState<FloatMessage[]>([]);
   const [winFlash, setWinFlash] = useState(false);
   const [lossShake, setLossShake] = useState(false);
+  const [winShake, setWinShake] = useState(false);
+  const [naturalBjFire, setNaturalBjFire] = useState(false);
   const [blackjackBusy, setBlackjackBusy] = useState(false);
 
   const floatId = useRef(0);
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slotCascadeTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dealerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerFailsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerSeqRef = useRef(0);
@@ -1052,6 +1303,10 @@ export default function App() {
       setSlotsState((prev) => ({
         ...prev,
         grid: generateSlotGrid(),
+        activeWins: [],
+        infernoPhase: 'idle',
+        burningCells: [],
+        cascadeFresh: [],
         slotResultMessage: 'New venue unlocked. 3×5 matrix recalibrated.',
       }));
       if (currentBet < STAGES[stageFromPeak].minBet) {
@@ -1064,16 +1319,27 @@ export default function App() {
     if (currentBet < minBet) setCurrentBet(minBet);
   }, [minBet, currentBet]);
 
+  const clearSlotCascadeTimers = useCallback(() => {
+    for (const id of slotCascadeTimeoutsRef.current) clearTimeout(id);
+    slotCascadeTimeoutsRef.current = [];
+  }, []);
+
+  const scheduleSlotCascade = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(fn, ms);
+    slotCascadeTimeoutsRef.current.push(id);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
       if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
+      clearSlotCascadeTimers();
       if (dealerTimeoutRef.current) clearTimeout(dealerTimeoutRef.current);
       if (dealerFailsafeRef.current) clearTimeout(dealerFailsafeRef.current);
       dealerSeqRef.current += 1;
       dealerActiveRef.current = false;
     };
-  }, []);
+  }, [clearSlotCascadeTimers]);
 
   const cancelDealerTimers = useCallback(() => {
     if (dealerTimeoutRef.current) {
@@ -1105,18 +1371,22 @@ export default function App() {
     setBlackjackBusy(false);
   }, [blackjackState.gameStatus, cancelDealerTimers]);
 
-  const addFloat = useCallback((text: string, positive: boolean) => {
+  const addFloat = useCallback((text: string, positive: boolean, fiery = false) => {
     const id = ++floatId.current;
-    setFloatMessages((prev) => [...prev, { id, text, positive }]);
-    setTimeout(() => setFloatMessages((prev) => prev.filter((m) => m.id !== id)), 1200);
+    setFloatMessages((prev) => [...prev, { id, text, positive, fiery }]);
+    setTimeout(() => setFloatMessages((prev) => prev.filter((m) => m.id !== id)), fiery ? 1400 : 1200);
   }, []);
 
   const feedbackWin = useCallback(
-    (amount: number) => {
+    (amount: number, wager?: number) => {
       playWinChime();
       setWinFlash(true);
       setTimeout(() => setWinFlash(false), 600);
-      addFloat(`+${formatMoney(amount)}`, true);
+      if (wager !== undefined && amount >= wager * MEGA_WIN_MULT) {
+        setWinShake(true);
+        setTimeout(() => setWinShake(false), 560);
+      }
+      addFloat(`+${formatMoney(amount)}`, true, true);
     },
     [addFloat],
   );
@@ -1129,6 +1399,119 @@ export default function App() {
       addFloat(`-${formatMoney(amount)}`, false);
     },
     [addFloat],
+  );
+
+  const triggerNaturalBjFire = useCallback(() => {
+    setNaturalBjFire(true);
+    setTimeout(() => setNaturalBjFire(false), 3200);
+  }, []);
+
+  const finalizeSlotsRound = useCallback(
+    (totalPayout: number, bet: number, summary: string, finalGrid: SlotGrid) => {
+      const net = totalPayout - bet;
+      if (net > 0) {
+        feedbackWin(net, bet);
+        setPlayerMoney((m) => m + totalPayout);
+      } else if (totalPayout === 0) {
+        feedbackLoss(bet);
+      }
+      setSlotsState((s) => ({
+        ...s,
+        grid: finalGrid,
+        isSpinning: false,
+        columnAnims: null,
+        stoppedColumns: SLOT_COLS,
+        activeWins: [],
+        infernoPhase: 'idle',
+        burningCells: [],
+        cascadeFresh: [],
+        cascadeChain: 0,
+        pendingBet: 0,
+        slotResultMessage: summary,
+      }));
+    },
+    [feedbackWin, feedbackLoss],
+  );
+
+  const runInfernoResolution = useCallback(
+    (grid: SlotGrid, bet: number, chain: number, accumulated: number) => {
+      const { payout, summary, wins } = evaluateSlotWinsDetailed(grid, bet);
+      const totalAcc = accumulated + payout;
+      const burnCells = getInfernoBurnCells(wins);
+      const canCascade = burnCells.length > 0 && chain < MAX_CASCADE_CHAINS;
+
+      setSlotsState((s) => ({
+        ...s,
+        grid,
+        activeWins: wins,
+        infernoPhase: payout > 0 ? 'ignite' : 'idle',
+        burningCells: [],
+        cascadeFresh: [],
+        cascadeChain: chain,
+        pendingBet: bet,
+        slotResultMessage:
+          chain > 0
+            ? `Inferno chain ×${chain + 1} · ${formatMoney(totalAcc)}`
+            : summary,
+      }));
+
+      if (payout === 0 && chain === 0) {
+        finalizeSlotsRound(0, bet, summary, grid);
+        return;
+      }
+
+      if (payout === 0 && chain > 0) {
+        finalizeSlotsRound(
+          accumulated,
+          bet,
+          `Inferno ×${chain + 1} complete · ${formatMoney(accumulated)}`,
+          grid,
+        );
+        return;
+      }
+
+      if (!canCascade) {
+        const finalSummary =
+          chain > 0
+            ? `Inferno ×${chain + 1} complete · ${formatMoney(totalAcc)}`
+            : summary;
+        scheduleSlotCascade(
+          () => finalizeSlotsRound(totalAcc, bet, finalSummary, grid),
+          payout > 0 ? INFERNO_IGNITE_MS + 500 : 0,
+        );
+        return;
+      }
+
+      scheduleSlotCascade(() => {
+        setSlotsState((s) => ({ ...s, infernoPhase: 'burn', burningCells: burnCells }));
+      }, INFERNO_IGNITE_MS);
+
+      scheduleSlotCascade(() => {
+        const newGrid = cascadeGrid(grid, burnCells);
+        const fresh: string[] = [];
+        const burnedPerCol = Array(SLOT_COLS).fill(0);
+        for (const key of burnCells) {
+          const [, c] = key.split(',').map(Number);
+          burnedPerCol[c]++;
+        }
+        for (let col = 0; col < SLOT_COLS; col++) {
+          for (let row = 0; row < burnedPerCol[col]; row++) fresh.push(`${row},${col}`);
+        }
+        setSlotsState((s) => ({
+          ...s,
+          grid: newGrid,
+          infernoPhase: 'cascade',
+          burningCells: [],
+          cascadeFresh: fresh,
+          slotResultMessage: `Cascade ${chain + 2} — symbols falling…`,
+        }));
+        scheduleSlotCascade(() => {
+          setSlotsState((s) => ({ ...s, cascadeFresh: [] }));
+          runInfernoResolution(newGrid, bet, chain + 1, totalAcc);
+        }, INFERNO_CASCADE_MS);
+      }, INFERNO_IGNITE_MS + INFERNO_BURN_MS);
+    },
+    [finalizeSlotsRound, scheduleSlotCascade],
   );
 
   const upgradeCost = (key: UpgradeKey): number => {
@@ -1188,8 +1571,10 @@ export default function App() {
           dv.isBlackjack,
         );
         const net = payout - bet;
-        if (net > 0) feedbackWin(net);
-        else if (net < 0) feedbackLoss(bet);
+        if (net > 0) {
+          if (pv.isBlackjack) triggerNaturalBjFire();
+          feedbackWin(net, bet);
+        } else if (net < 0) feedbackLoss(bet);
         setPlayerMoney((m) => m + payout);
         setBlackjackState((s) => ({
           ...s,
@@ -1205,7 +1590,7 @@ export default function App() {
         releaseDealerLock();
       }
     },
-    [resolveBlackjack, feedbackWin, feedbackLoss, releaseDealerLock],
+    [resolveBlackjack, feedbackWin, feedbackLoss, releaseDealerLock, triggerNaturalBjFire],
   );
 
   const runDealerTurn = useCallback(
@@ -1324,8 +1709,10 @@ export default function App() {
         dv.isBlackjack,
       );
       const net = payout - bet;
-      if (net > 0) feedbackWin(net);
-      else if (net < 0) feedbackLoss(bet);
+      if (net > 0) {
+        if (pv.isBlackjack) triggerNaturalBjFire();
+        feedbackWin(net, bet);
+      } else if (net < 0) feedbackLoss(bet);
       setPlayerMoney((m) => m + payout);
       setBlackjackState({
         playerHand,
@@ -1479,6 +1866,7 @@ export default function App() {
       return { ...base, duration: baseDurations[col] };
     });
 
+    clearSlotCascadeTimers();
     setPlayerMoney((m) => m - bet);
     setSlotsState({
       grid: finalGrid,
@@ -1486,6 +1874,12 @@ export default function App() {
       columnAnims,
       slotResultMessage: 'Matrix engaged — columns locking…',
       stoppedColumns: 0,
+      activeWins: [],
+      infernoPhase: 'idle',
+      burningCells: [],
+      cascadeFresh: [],
+      cascadeChain: 0,
+      pendingBet: bet,
     });
 
     slotSpinSoundRef.current = setInterval(() => playSlotClick(), 120);
@@ -1494,21 +1888,13 @@ export default function App() {
 
     const finishSpin = () => {
       if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
-      const { payout, summary } = evaluateSlotWins(finalGrid, bet);
-      const net = payout - bet;
-      if (net > 0) {
-        feedbackWin(net);
-        setPlayerMoney((m) => m + payout);
-      } else {
-        feedbackLoss(bet);
-      }
-      setSlotsState({
-        grid: finalGrid,
+      setSlotsState((s) => ({
+        ...s,
         isSpinning: false,
         columnAnims: null,
-        slotResultMessage: summary,
         stoppedColumns: SLOT_COLS,
-      });
+      }));
+      runInfernoResolution(finalGrid, bet, 0, 0);
     };
 
     const maxMs = Math.max(...baseDurations) * 1000 + 200;
@@ -1533,10 +1919,17 @@ export default function App() {
       columnAnims: null,
       isSpinning: false,
       stoppedColumns: SLOT_COLS,
+      activeWins: [],
+      infernoPhase: 'idle',
+      burningCells: [],
+      cascadeFresh: [],
     }));
   };
 
   const theme = stage.theme;
+  const heatGlow = getHeatGlowClass(passiveIncomeRate);
+  const slotsResolving =
+    slotsState.infernoPhase !== 'idle' || slotsState.activeWins.length > 0;
   const dealerTotal = handValue(blackjackState.dealerHand).total;
   const playerTotal = handValue(blackjackState.playerHand).total;
   const canBet = blackjackState.gameStatus === 'betting' && !blackjackBusy;
@@ -1553,7 +1946,7 @@ export default function App() {
 
   return (
     <div
-      className={`theme-transition max-w-md mx-auto h-[100dvh] flex flex-col overflow-hidden ${theme.appShell} ${winFlash ? 'animate-flash-win' : ''} ${lossShake ? 'animate-shake-loss' : ''}`}
+      className={`theme-transition max-w-md mx-auto h-[100dvh] flex flex-col overflow-hidden ${theme.appShell} ${heatGlow} ${winFlash ? 'animate-flash-win' : ''} ${lossShake ? 'animate-shake-loss' : ''} ${winShake ? 'animate-win-shake' : ''}`}
     >
       <header className={`theme-transition shrink-0 pt-safe px-safe border-b ${theme.header}`}>
         <div className="px-4 py-3">
@@ -1616,8 +2009,8 @@ export default function App() {
           {floatMessages.map((fm) => (
             <div
               key={fm.id}
-              className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 font-bold text-lg animate-float-up ${
-                fm.positive ? 'text-emerald-400' : 'text-red-400'
+              className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 font-black text-xl ${
+                fm.fiery ? 'animate-fiery-float-up text-fire-win fiery-float-particles' : fm.positive ? 'animate-float-up text-emerald-400' : 'animate-float-up text-red-400'
               }`}
               style={{ top: '28%' }}
             >
@@ -1649,6 +2042,7 @@ export default function App() {
                   cards={blackjackState.playerHand}
                   showScore={blackjackState.playerHand.length > 0}
                   total={playerTotal}
+                  cardsOnFire={naturalBjFire}
                 />
               </div>
 
@@ -1703,6 +2097,10 @@ export default function App() {
                   spinning={slotsState.isSpinning}
                   columnAnims={slotsState.columnAnims}
                   stoppedColumns={slotsState.stoppedColumns}
+                  activeWins={slotsState.activeWins}
+                  infernoPhase={slotsState.infernoPhase}
+                  burningCells={slotsState.burningCells}
+                  cascadeFresh={slotsState.cascadeFresh}
                 />
               </div>
               <p className="text-center text-xs text-zinc-400 mt-2 mb-1 min-h-[32px] shrink-0 px-1">
@@ -1714,7 +2112,7 @@ export default function App() {
               <GoldButton
                 theme={theme}
                 onClick={spinSlots}
-                disabled={slotsState.isSpinning || playerMoney < currentBet}
+                disabled={slotsState.isSpinning || slotsResolving || playerMoney < currentBet}
                 className={
                   currentStage === 3
                     ? 'shadow-[0_0_30px_rgba(212,175,55,0.4)]'
@@ -1723,7 +2121,9 @@ export default function App() {
               >
                 {slotsState.isSpinning
                   ? 'SPINNING…'
-                  : `Initiate Spin · ${formatMoney(currentBet)}`}
+                  : slotsResolving
+                    ? 'INFERNO…'
+                    : `Initiate Spin · ${formatMoney(currentBet)}`}
               </GoldButton>
             </GlassPanel>
           )}
@@ -1773,6 +2173,7 @@ export default function App() {
                 const owned = upgradesBought[item.key];
                 const cost = upgradeCost(item.key);
                 const isOneTime = item.key === 'offshore';
+                const acquired = isOneTime ? owned > 0 : owned > 0;
                 const disabled = playerMoney < cost || (isOneTime && owned > 0);
                 const elite = item.tier === 'elite';
                 return (
@@ -1791,9 +2192,16 @@ export default function App() {
                         {isOneTime ? (owned > 0 ? '✓' : '—') : `×${owned}`}
                       </span>
                     </div>
-                    <GoldButton theme={theme} onClick={() => buyUpgrade(item.key)} disabled={disabled}>
-                      {isOneTime && owned > 0
-                        ? 'Licensed'
+                    <GoldButton
+                      theme={theme}
+                      onClick={() => buyUpgrade(item.key)}
+                      disabled={disabled}
+                      acquired={acquired && disabled}
+                    >
+                      {acquired && disabled
+                        ? isOneTime
+                          ? '◆ BRANDED ◆'
+                          : `◆ OWNED ×${owned} ◆`
                         : `Acquire · ${formatMoney(cost)}`}
                     </GoldButton>
                   </GlassPanel>
