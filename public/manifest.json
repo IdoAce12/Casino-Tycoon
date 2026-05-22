@@ -3,8 +3,8 @@
   "name": "Casino Tycoon: Lone Empire",
   "icons": [
     {
-      "src": "https://api.iconify.design/fluent-emoji:slot-machine.svg",
-      "type": "image/svg+xml",
+      "src": "https://img.icons8.com/color/512/slot-machine.png",
+      "type": "image/png",
       "sizes": "512x512"
     }
   ],

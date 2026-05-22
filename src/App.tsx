@@ -12,7 +12,7 @@ type Tab = 'blackjack' | 'slots' | 'shop' | 'empire';
 type GameStatus = 'betting' | 'player-turn' | 'dealer-turn' | 'resolved';
 type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
 type Suit = '♠' | '♥' | '♦' | '♣';
-type UpgradeKey = 'hustler' | 'lens' | 'ownership';
+type UpgradeKey = 'hustler' | 'ownership' | 'hftBot' | 'offshore' | 'megaResort';
 
 interface Card {
   rank: Rank;
@@ -30,23 +30,28 @@ interface BlackjackState {
   dealerHoleHidden: boolean;
 }
 
-interface ReelAnim {
+interface ColumnAnim {
   strip: string[];
   targetOffset: number;
   duration: number;
 }
 
+type SlotGrid = [string, string, string, string, string][];
+
 interface SlotsState {
-  reels: [string, string, string];
+  grid: SlotGrid;
   isSpinning: boolean;
   slotResultMessage: string;
-  reelAnims: [ReelAnim, ReelAnim, ReelAnim] | null;
+  columnAnims: ColumnAnim[] | null;
+  stoppedColumns: number;
 }
 
 interface UpgradesBought {
   hustler: number;
-  lens: number;
   ownership: number;
+  hftBot: number;
+  offshore: number;
+  megaResort: number;
 }
 
 interface StageTheme {
@@ -87,7 +92,7 @@ interface StageConfig {
   minBet: number;
   symbols: [string, string, string];
   theme: StageTheme;
-  shopNames: { hustler: string; lens: string; ownership: string };
+  shopNames: { hustler: string; ownership: string };
 }
 
 interface FloatMessage {
@@ -140,7 +145,6 @@ const STAGES: StageConfig[] = [
     },
     shopNames: {
       hustler: 'Street Hustler',
-      lens: 'Card Counting Lens',
       ownership: 'Bribery',
     },
   },
@@ -182,7 +186,6 @@ const STAGES: StageConfig[] = [
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
-      lens: "Dealer's Leak",
       ownership: 'Casino Ownership Share',
     },
   },
@@ -224,7 +227,6 @@ const STAGES: StageConfig[] = [
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
-      lens: "Dealer's Leak",
       ownership: 'Casino Ownership Share',
     },
   },
@@ -266,19 +268,94 @@ const STAGES: StageConfig[] = [
     },
     shopNames: {
       hustler: 'Auto Slot-Bot',
-      lens: "Dealer's Leak",
       ownership: 'Casino Ownership Share',
     },
   },
 ];
 
+const SLOT_SYMBOLS = ['🦩', '🍒', '💵', '🎲', '💎', '👑', '🃏', '🎰', '🍀', '🔔'] as const;
+const SLOT_ROWS = 3;
+const SLOT_COLS = 5;
+const SLOT_CELL_H = 52;
+
+const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
+  [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [0, 4],
+  ],
+  [
+    [1, 0],
+    [1, 1],
+    [1, 2],
+    [1, 3],
+    [1, 4],
+  ],
+  [
+    [2, 0],
+    [2, 1],
+    [2, 2],
+    [2, 3],
+    [2, 4],
+  ],
+  [
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [1, 3],
+    [0, 4],
+  ],
+  [
+    [2, 0],
+    [1, 1],
+    [0, 2],
+    [1, 3],
+    [2, 4],
+  ],
+  [
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [2, 3],
+    [2, 4],
+  ],
+  [
+    [2, 0],
+    [1, 1],
+    [0, 2],
+    [0, 3],
+    [0, 4],
+  ],
+  [
+    [1, 0],
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [1, 4],
+  ],
+  [
+    [1, 0],
+    [2, 1],
+    [2, 2],
+    [2, 3],
+    [1, 4],
+  ],
+];
+
+const PAYLINE_MULTIPLIERS: Record<3 | 4 | 5, number> = { 3: 2, 4: 5, 5: 25 };
+
 const UPGRADE_BASE = {
   hustler: { cost: 75, income: 2 },
-  lens: { cost: 350 },
   ownership: { cost: 2500, income: 15 },
+  hftBot: { cost: 12_500_000, income: 35, compoundPerLevel: 0.03 },
+  offshore: { cost: 2_500_000_000, maxLevel: 1 },
+  megaResort: { cost: 8e12, income: 2_500_000 },
 };
 
-const SLOT_REEL_CELL_H = 76;
+const OFFSHORE_PASSIVE_MULT = 2.5;
+const COLUMN_STOP_STAGGER_MS = 420;
 const DEALER_DRAW_DELAY_MS = 1000;
 const DEALER_RESOLVE_DELAY_MS = 800;
 const DEALER_FAILSAFE_MS = 20000;
@@ -420,20 +497,66 @@ function cardColor(card: Card): string {
   return card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-slate-900';
 }
 
-function buildReelStrip(symbols: [string, string, string], finalSym: string, loops: number): ReelAnim {
+function randomSlotSymbol(): string {
+  return SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
+}
+
+function generateSlotGrid(): SlotGrid {
+  return Array.from({ length: SLOT_ROWS }, () =>
+    Array.from({ length: SLOT_COLS }, () => randomSlotSymbol()),
+  ) as SlotGrid;
+}
+
+function buildColumnStrip(finals: [string, string, string], loops: number): ColumnAnim {
   const strip: string[] = [];
   for (let loop = 0; loop < loops; loop++) {
-    for (const s of symbols) strip.push(s);
+    for (let i = 0; i < SLOT_ROWS; i++) strip.push(randomSlotSymbol());
   }
-  for (let i = 0; i < 3; i++) strip.push(symbols[Math.floor(Math.random() * 3)]);
-  strip.push(finalSym);
-  strip.push(symbols[Math.floor(Math.random() * 3)]);
-  const landIndex = strip.length - 2;
+  strip.push(...finals);
+  const landIndex = strip.length - SLOT_ROWS;
   return {
     strip,
-    targetOffset: -landIndex * SLOT_REEL_CELL_H,
+    targetOffset: -landIndex * SLOT_CELL_H,
     duration: 0,
   };
+}
+
+function countPaylineMatch(symbols: string[]): number {
+  const first = symbols[0];
+  let count = 1;
+  for (let i = 1; i < symbols.length; i++) {
+    if (symbols[i] === first) count++;
+    else break;
+  }
+  return count >= 3 ? count : 0;
+}
+
+function evaluateSlotWins(grid: SlotGrid, bet: number): { payout: number; summary: string } {
+  let totalPayout = 0;
+  const wins: string[] = [];
+
+  for (let i = 0; i < PAYLINES.length; i++) {
+    const line = PAYLINES[i];
+    const symbols = line.map(([r, c]) => grid[r][c]);
+    const count = countPaylineMatch(symbols);
+    if (count >= 3) {
+      const mult = PAYLINE_MULTIPLIERS[count as 3 | 4 | 5];
+      const linePayout = bet * mult;
+      totalPayout += linePayout;
+      const label = count === 5 ? 'JACKPOT' : `${count}×`;
+      wins.push(`Line ${i + 1}: ${label} ${symbols[0]} → ${formatMoney(linePayout)}`);
+    }
+  }
+
+  if (totalPayout === 0) {
+    return { payout: 0, summary: 'No payline hits. Wager forfeited.' };
+  }
+
+  const headline =
+    wins.length === 1
+      ? wins[0]
+      : `${wins.length} paylines · ${formatMoney(totalPayout)} total`;
+  return { payout: totalPayout, summary: headline };
 }
 
 const MONEY_TIERS: { threshold: number; suffix: string }[] = [
@@ -498,12 +621,13 @@ function initialBlackjack(): BlackjackState {
   };
 }
 
-function initialSlots(symbols: [string, string, string]): SlotsState {
+function initialSlots(): SlotsState {
   return {
-    reels: [...symbols],
+    grid: generateSlotGrid(),
     isSpinning: false,
     slotResultMessage: 'Adjust wager and initiate spin sequence.',
-    reelAnims: null,
+    columnAnims: null,
+    stoppedColumns: SLOT_COLS,
   };
 }
 
@@ -679,24 +803,25 @@ function PlayingCard({
   );
 }
 
-function SlotReel({
-  displaySymbol,
+function SlotColumn({
+  columnSymbols,
   anim,
   spinning,
-  reelIndex,
-  cellHeight,
+  columnIndex,
+  stopped,
 }: {
-  displaySymbol: string;
-  anim: ReelAnim | null;
+  columnSymbols: [string, string, string];
+  anim: ColumnAnim | null;
   spinning: boolean;
-  reelIndex: number;
-  cellHeight: number;
+  columnIndex: number;
+  stopped: boolean;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const viewportH = SLOT_CELL_H * SLOT_ROWS;
 
   useEffect(() => {
-    if (!anim || !spinning) {
+    if (!anim || !spinning || stopped) {
       setOffset(0);
       setTransitioning(false);
       return;
@@ -710,21 +835,22 @@ function SlotReel({
       });
     });
     return () => cancelAnimationFrame(startId);
-  }, [anim, spinning]);
+  }, [anim, spinning, stopped]);
 
   const duration = anim?.duration ?? 2.2;
+  const isAnimating = anim && spinning && !stopped;
 
   return (
     <div
-      className="relative flex-1 min-w-0 max-w-[100px] rounded-lg overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)]"
-      style={{ height: cellHeight }}
+      className="relative flex-1 min-w-0 max-w-[64px] rounded-lg overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)]"
+      style={{ height: viewportH }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
-      <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-white/10 to-transparent z-10 pointer-events-none" />
       <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
       <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-gold/30 z-20 pointer-events-none" />
       <div className="absolute inset-0 overflow-hidden">
-        {anim && spinning ? (
+        {isAnimating ? (
           <div
             className="reel-strip"
             style={{
@@ -736,40 +862,52 @@ function SlotReel({
           >
             {anim.strip.map((sym, idx) => (
               <div
-                key={`${reelIndex}-${idx}`}
+                key={`${columnIndex}-${idx}`}
                 className="flex items-center justify-center select-none"
-                style={{ height: cellHeight }}
+                style={{ height: SLOT_CELL_H }}
               >
-                <span className="text-4xl sm:text-5xl drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]">{sym}</span>
+                <span className="text-2xl sm:text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]">{sym}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full" style={{ height: cellHeight }}>
-            <span className="text-4xl sm:text-5xl select-none drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
-              {displaySymbol}
-            </span>
+          <div className="flex flex-col">
+            {columnSymbols.map((sym, row) => (
+              <div
+                key={`${columnIndex}-${row}`}
+                className="flex items-center justify-center select-none"
+                style={{ height: SLOT_CELL_H }}
+              >
+                <span className="text-2xl sm:text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">{sym}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
-      <div className="absolute bottom-1 inset-x-0 flex justify-center z-10 pointer-events-none">
-        <span className="text-[7px] text-zinc-600 font-mono tracking-widest">REEL {reelIndex + 1}</span>
+      <div className="absolute bottom-0.5 inset-x-0 flex justify-center z-10 pointer-events-none">
+        <span className="text-[6px] text-zinc-600 font-mono tracking-widest">COL {columnIndex + 1}</span>
       </div>
     </div>
   );
 }
 
-function SlotCabinet({
+function SlotMatrix({
   theme,
-  reels,
+  grid,
   spinning,
-  reelAnims,
+  columnAnims,
+  stoppedColumns,
 }: {
   theme: StageTheme;
-  reels: [string, string, string];
+  grid: SlotGrid;
   spinning: boolean;
-  reelAnims: [ReelAnim, ReelAnim, ReelAnim] | null;
+  columnAnims: ColumnAnim[] | null;
+  stoppedColumns: number;
 }) {
+  const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
+    [grid[0][col], grid[1][col], grid[2][col]] as [string, string, string],
+  );
+
   return (
     <div className={`relative w-full mx-auto theme-transition ${theme.slotGlow}`}>
       <div className="absolute -inset-1 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
@@ -778,35 +916,45 @@ function SlotCabinet({
       >
         <div className="flex items-center justify-between px-2 mb-1.5">
           <span className={`text-[10px] font-bold tracking-[0.25em] uppercase ${theme.title}`}>
-            VIP Series
+            VIP · 3×5 Matrix
           </span>
           <div className="flex gap-1">
-            {[0, 1, 2].map((i) => (
+            {Array.from({ length: SLOT_COLS }, (_, i) => (
               <div
                 key={i}
-                className={`w-1.5 h-1.5 rounded-full theme-transition ${spinning ? 'bg-white animate-pulse opacity-100' : 'bg-white/30'}`}
+                className={`w-1.5 h-1.5 rounded-full theme-transition ${
+                  spinning && i >= stoppedColumns
+                    ? 'bg-white animate-pulse opacity-100'
+                    : spinning
+                      ? 'bg-emerald-400/80'
+                      : 'bg-white/30'
+                }`}
               />
             ))}
           </div>
         </div>
         <div className="rounded-xl border border-zinc-700 bg-black p-1.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
-          <div className="flex gap-2 justify-center w-full">
-            {reels.map((sym, i) => (
-              <SlotReel
+          <div className="flex gap-1 justify-center w-full">
+            {columns.map((colSyms, i) => (
+              <SlotColumn
                 key={i}
-                reelIndex={i}
-                displaySymbol={sym}
-                anim={reelAnims?.[i] ?? null}
-                spinning={spinning && reelAnims !== null}
-                cellHeight={SLOT_REEL_CELL_H}
+                columnIndex={i}
+                columnSymbols={colSyms}
+                anim={columnAnims?.[i] ?? null}
+                spinning={spinning && columnAnims !== null}
+                stopped={!spinning || i < stoppedColumns}
               />
             ))}
           </div>
         </div>
-        <div className="mt-1.5 h-1 rounded-full bg-zinc-800 overflow-hidden">
+        <div className="mt-1.5 flex justify-between px-1">
+          <span className="text-[8px] text-zinc-600 tracking-wider">9 PAYLINES</span>
+          <span className="text-[8px] text-zinc-600 tracking-wider">3×2×5×25×</span>
+        </div>
+        <div className="mt-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
           <div
             className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light transition-all ease-out ${spinning ? 'w-full' : 'w-0'}`}
-            style={{ transitionDuration: spinning ? '2900ms' : '300ms' }}
+            style={{ transitionDuration: spinning ? '3800ms' : '300ms' }}
           />
         </div>
       </div>
@@ -821,13 +969,15 @@ export default function App() {
   const [currentBet, setCurrentBet] = useState(5);
   const [passiveIncomeRate, setPassiveIncomeRate] = useState(0);
   const [blackjackState, setBlackjackState] = useState<BlackjackState>(initialBlackjack);
-  const [slotsState, setSlotsState] = useState<SlotsState>(() => initialSlots(STAGES[0].symbols));
+  const [slotsState, setSlotsState] = useState<SlotsState>(() => initialSlots());
   const [currentTab, setCurrentTab] = useState<Tab>('blackjack');
   const [currentStage, setCurrentStage] = useState(0);
   const [upgradesBought, setUpgradesBought] = useState<UpgradesBought>({
     hustler: 0,
-    lens: 0,
     ownership: 0,
+    hftBot: 0,
+    offshore: 0,
+    megaResort: 0,
   });
   const [stageModal, setStageModal] = useState<StageConfig | null>(null);
   const [lifetimePeakMoney, setLifetimePeakMoney] = useState(100);
@@ -871,7 +1021,12 @@ export default function App() {
     const ownershipIncome = upgrades.ownership
       ? UPGRADE_BASE.ownership.income * Math.pow(2, upgrades.ownership) * stageMult
       : 0;
-    return hustlerIncome + ownershipIncome;
+    const hftIncome = upgrades.hftBot * UPGRADE_BASE.hftBot.income * stageMult;
+    const megaIncome = upgrades.megaResort * UPGRADE_BASE.megaResort.income * stageMult;
+    const hftCompound = Math.pow(1 + UPGRADE_BASE.hftBot.compoundPerLevel, upgrades.hftBot);
+    let rate = (hustlerIncome + ownershipIncome + hftIncome + megaIncome) * hftCompound;
+    if (upgrades.offshore > 0) rate *= OFFSHORE_PASSIVE_MULT;
+    return rate;
   }, []);
 
   useEffect(() => {
@@ -896,8 +1051,8 @@ export default function App() {
       setStageModal(STAGES[stageFromPeak]);
       setSlotsState((prev) => ({
         ...prev,
-        reels: [...STAGES[stageFromPeak].symbols],
-        slotResultMessage: 'New venue unlocked. Premium reels calibrated.',
+        grid: generateSlotGrid(),
+        slotResultMessage: 'New venue unlocked. 3×5 matrix recalibrated.',
       }));
       if (currentBet < STAGES[stageFromPeak].minBet) {
         setCurrentBet(STAGES[stageFromPeak].minBet);
@@ -979,13 +1134,17 @@ export default function App() {
   const upgradeCost = (key: UpgradeKey): number => {
     const base = UPGRADE_BASE[key].cost;
     const count = upgradesBought[key];
-    return Math.floor(base * Math.pow(1.5, count) * (1 + currentStage * 0.35));
+    const stageScale = 1 + currentStage * 0.35;
+    if (key === 'offshore') return Math.floor(base * stageScale);
+    if (key === 'megaResort') return Math.floor(base * Math.pow(1.85, count) * stageScale);
+    if (key === 'hftBot') return Math.floor(base * Math.pow(1.65, count) * stageScale);
+    return Math.floor(base * Math.pow(1.5, count) * stageScale);
   };
 
   const buyUpgrade = (key: UpgradeKey) => {
     const cost = upgradeCost(key);
     if (playerMoney < cost) return;
-    if (key === 'lens' && upgradesBought.lens > 0) return;
+    if (key === 'offshore' && upgradesBought.offshore > 0) return;
     setPlayerMoney((m) => m - cost);
     setUpgradesBought((u) => ({ ...u, [key]: u[key] + 1 }));
     playWinChime();
@@ -1308,43 +1467,34 @@ export default function App() {
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
 
-    const symbols = stage.symbols;
-    const final: [string, string, string] = [
-      symbols[Math.floor(Math.random() * 3)],
-      symbols[Math.floor(Math.random() * 3)],
-      symbols[Math.floor(Math.random() * 3)],
-    ];
-    const durations = [2.1, 2.5, 2.9] as const;
-    const reelAnims: [ReelAnim, ReelAnim, ReelAnim] = final.map((sym, i) => {
-      const base = buildReelStrip(symbols, sym, 7 + i * 2);
-      return { ...base, duration: durations[i] };
-    }) as [ReelAnim, ReelAnim, ReelAnim];
+    const finalGrid = generateSlotGrid();
+    const baseDurations = [1.6, 1.9, 2.2, 2.5, 2.8] as const;
+    const columnAnims: ColumnAnim[] = Array.from({ length: SLOT_COLS }, (_, col) => {
+      const finals = [finalGrid[0][col], finalGrid[1][col], finalGrid[2][col]] as [
+        string,
+        string,
+        string,
+      ];
+      const base = buildColumnStrip(finals, 6 + col * 2);
+      return { ...base, duration: baseDurations[col] };
+    });
 
     setPlayerMoney((m) => m - bet);
     setSlotsState({
-      reels: final,
+      grid: finalGrid,
       isSpinning: true,
-      reelAnims,
-      slotResultMessage: 'Reels engaged…',
+      columnAnims,
+      slotResultMessage: 'Matrix engaged — columns locking…',
+      stoppedColumns: 0,
     });
 
     slotSpinSoundRef.current = setInterval(() => playSlotClick(), 120);
 
-    const maxMs = Math.max(...durations) * 1000 + 150;
     if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
-    slotSpinEndRef.current = setTimeout(() => {
-      if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
 
-      const [a, b, c] = final;
-      let payout = 0;
-      let msg = 'No match. Wager forfeited.';
-      if (a === b && b === c) {
-        payout = bet * 10;
-        msg = `JACKPOT — Triple match. ${formatMoney(payout)}`;
-      } else if (a === b || b === c || a === c) {
-        payout = bet * 2;
-        msg = `Pair payout. ${formatMoney(payout)}`;
-      }
+    const finishSpin = () => {
+      if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
+      const { payout, summary } = evaluateSlotWins(finalGrid, bet);
       const net = payout - bet;
       if (net > 0) {
         feedbackWin(net);
@@ -1353,12 +1503,24 @@ export default function App() {
         feedbackLoss(bet);
       }
       setSlotsState({
-        reels: final,
+        grid: finalGrid,
         isSpinning: false,
-        reelAnims: null,
-        slotResultMessage: msg,
+        columnAnims: null,
+        slotResultMessage: summary,
+        stoppedColumns: SLOT_COLS,
       });
-    }, maxMs);
+    };
+
+    const maxMs = Math.max(...baseDurations) * 1000 + 200;
+    slotSpinEndRef.current = setTimeout(finishSpin, maxMs);
+
+    for (let col = 1; col <= SLOT_COLS; col++) {
+      setTimeout(() => {
+        setSlotsState((s) =>
+          s.isSpinning ? { ...s, stoppedColumns: col } : s,
+        );
+      }, col * COLUMN_STOP_STAGGER_MS + 400);
+    }
   };
 
   const selectStage = (idx: number) => {
@@ -1367,9 +1529,10 @@ export default function App() {
     setCurrentBet(Math.max(currentBet, STAGES[idx].minBet));
     setSlotsState((s) => ({
       ...s,
-      reels: [...STAGES[idx].symbols],
-      reelAnims: null,
+      grid: generateSlotGrid(),
+      columnAnims: null,
       isSpinning: false,
+      stoppedColumns: SLOT_COLS,
     }));
   };
 
@@ -1531,21 +1694,22 @@ export default function App() {
               className={`p-2 ring-1 ${theme.ring} flex flex-col flex-1 min-h-0`}
             >
               <p className={`text-center text-[10px] tracking-widest uppercase mb-2 shrink-0 ${theme.muted}`}>
-                VIP · 3-reel
+                VIP · 3×5 Professional
               </p>
               <div className="flex-1 flex items-center min-h-0 py-1">
-                <SlotCabinet
+                <SlotMatrix
                   theme={theme}
-                  reels={slotsState.reels}
+                  grid={slotsState.grid}
                   spinning={slotsState.isSpinning}
-                  reelAnims={slotsState.reelAnims}
+                  columnAnims={slotsState.columnAnims}
+                  stoppedColumns={slotsState.stoppedColumns}
                 />
               </div>
-              <p className="text-center text-xs text-zinc-400 mt-2 mb-1 min-h-[32px] shrink-0">
+              <p className="text-center text-xs text-zinc-400 mt-2 mb-1 min-h-[32px] shrink-0 px-1">
                 {slotsState.slotResultMessage}
               </p>
               <p className="text-center text-[10px] text-zinc-600 mb-2 shrink-0">
-                Triple 10× · Pair 2×
+                9 paylines · 3×2× · 4×5× · 5×25× jackpot
               </p>
               <GoldButton
                 theme={theme}
@@ -1581,23 +1745,35 @@ export default function App() {
                     tier: 'standard' as const,
                   },
                   {
-                    key: 'lens' as UpgradeKey,
-                    name: stage.shopNames.lens,
-                    desc: 'Insider table intel — sharpens long-term edge',
-                    tier: 'premium' as const,
-                  },
-                  {
                     key: 'ownership' as UpgradeKey,
                     name: stage.shopNames.ownership,
                     desc: 'Exponential empire revenue multiplier',
+                    tier: 'standard' as const,
+                  },
+                  {
+                    key: 'hftBot' as UpgradeKey,
+                    name: 'High-Frequency Trading Bot',
+                    desc: 'Compounds passive revenue — +3% compound per level',
+                    tier: 'premium' as const,
+                  },
+                  {
+                    key: 'offshore' as UpgradeKey,
+                    name: 'Offshore Banking License',
+                    desc: `Multiplies all passive income by ${OFFSHORE_PASSIVE_MULT}× (one-time)`,
+                    tier: 'premium' as const,
+                  },
+                  {
+                    key: 'megaResort' as UpgradeKey,
+                    name: 'Mega-Resort Casino Acquisition',
+                    desc: `+${formatMoney(UPGRADE_BASE.megaResort.income)}/s baseline per level — endgame empire asset`,
                     tier: 'elite' as const,
                   },
                 ] as const
               ).map((item) => {
                 const owned = upgradesBought[item.key];
                 const cost = upgradeCost(item.key);
-                const isLens = item.key === 'lens';
-                const disabled = playerMoney < cost || (isLens && owned > 0);
+                const isOneTime = item.key === 'offshore';
+                const disabled = playerMoney < cost || (isOneTime && owned > 0);
                 const elite = item.tier === 'elite';
                 return (
                   <GlassPanel
@@ -1611,10 +1787,14 @@ export default function App() {
                         <h3 className={`font-semibold text-sm ${theme.money}`}>{item.name}</h3>
                         <p className={`text-[11px] mt-0.5 ${theme.muted}`}>{item.desc}</p>
                       </div>
-                      <span className="text-[10px] text-zinc-600 tabular-nums">×{owned}</span>
+                      <span className="text-[10px] text-zinc-600 tabular-nums">
+                        {isOneTime ? (owned > 0 ? '✓' : '—') : `×${owned}`}
+                      </span>
                     </div>
                     <GoldButton theme={theme} onClick={() => buyUpgrade(item.key)} disabled={disabled}>
-                      {isLens && owned > 0 ? 'Acquired' : `Acquire · ${formatMoney(cost)}`}
+                      {isOneTime && owned > 0
+                        ? 'Licensed'
+                        : `Acquire · ${formatMoney(cost)}`}
                     </GoldButton>
                   </GlassPanel>
                 );
@@ -1666,7 +1846,7 @@ export default function App() {
                         )}
                       </div>
                       <p className="text-[10px] text-zinc-600 mt-1">
-                        Min {formatMoney(s.minBet)} · {s.symbols.join(' ')}
+                        Min {formatMoney(s.minBet)} · 3×5 matrix · {SLOT_SYMBOLS.length} symbols
                       </p>
                     </button>
                   );
@@ -1680,14 +1860,22 @@ export default function App() {
                     <span className="text-gold/80">{upgradesBought.hustler}</span>
                   </li>
                   <li className="flex justify-between">
-                    <span>{stage.shopNames.lens}</span>
+                    <span>{stage.shopNames.ownership}</span>
+                    <span className="text-gold/80">{upgradesBought.ownership}</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>HFT Trading Bot</span>
+                    <span className="text-gold/80">{upgradesBought.hftBot}</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Offshore Banking</span>
                     <span className="text-gold/80">
-                      {upgradesBought.lens > 0 ? 'Active' : '—'}
+                      {upgradesBought.offshore > 0 ? `${OFFSHORE_PASSIVE_MULT}×` : '—'}
                     </span>
                   </li>
                   <li className="flex justify-between">
-                    <span>{stage.shopNames.ownership}</span>
-                    <span className="text-gold/80">{upgradesBought.ownership}</span>
+                    <span>Mega-Resort Acquisition</span>
+                    <span className="text-gold/80">{upgradesBought.megaResort}</span>
                   </li>
                 </ul>
               </GlassPanel>
@@ -1732,7 +1920,7 @@ export default function App() {
               </div>
               <p className={`text-lg font-semibold ${theme.money}`}>{stageModal.name}</p>
               <p className={`text-xs mt-2 ${theme.muted}`}>
-                Minimum wager {formatMoney(stageModal.minBet)} · Premium reels active
+                Minimum wager {formatMoney(stageModal.minBet)} · 3×5 matrix active
               </p>
               <div className="mt-6">
                 <GoldButton theme={theme} onClick={() => setStageModal(null)}>Enter the Floor</GoldButton>
