@@ -294,7 +294,27 @@ const SLOT_SYMBOLS = ['🦩', '🍒', '💵', '🎲', '💎', '👑', '🃏', '�
 const SLOT_ROWS = 3;
 const SLOT_COLS = 5;
 const SLOT_CELL_H = 52;
+const PAYLINE_COUNT = 20;
+const LUCKY_SPIN_CHANCE = 0.48;
+const LUCKY_SECOND_LINE_CHANCE = 0.32;
 
+/** Common symbols appear 2× more often than rare tier */
+const SLOT_SYMBOL_WEIGHTS: { symbol: (typeof SLOT_SYMBOLS)[number]; weight: number }[] = [
+  { symbol: '🍒', weight: 4 },
+  { symbol: '🍀', weight: 4 },
+  { symbol: '🔔', weight: 4 },
+  { symbol: '💵', weight: 2 },
+  { symbol: '🎲', weight: 2 },
+  { symbol: '🃏', weight: 2 },
+  { symbol: '🦩', weight: 1 },
+  { symbol: '💎', weight: 1 },
+  { symbol: '👑', weight: 1 },
+  { symbol: '🎰', weight: 1 },
+];
+
+const WEIGHTED_SYMBOL_TOTAL = SLOT_SYMBOL_WEIGHTS.reduce((s, e) => s + e.weight, 0);
+
+/** 20 paylines: 3 horizontals, 2 diagonals, 15 structural (V, M, W, zigzags) */
 const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
   [
     [0, 0],
@@ -333,15 +353,15 @@ const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
   ],
   [
     [0, 0],
-    [1, 1],
-    [2, 2],
+    [0, 1],
+    [1, 2],
     [2, 3],
     [2, 4],
   ],
   [
     [2, 0],
-    [1, 1],
-    [0, 2],
+    [2, 1],
+    [1, 2],
     [0, 3],
     [0, 4],
   ],
@@ -359,16 +379,95 @@ const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
     [2, 3],
     [1, 4],
   ],
+  [
+    [0, 0],
+    [1, 1],
+    [0, 2],
+    [1, 3],
+    [0, 4],
+  ],
+  [
+    [2, 0],
+    [1, 1],
+    [2, 2],
+    [1, 3],
+    [2, 4],
+  ],
+  [
+    [1, 0],
+    [1, 1],
+    [0, 2],
+    [1, 3],
+    [1, 4],
+  ],
+  [
+    [1, 0],
+    [1, 1],
+    [2, 2],
+    [1, 3],
+    [1, 4],
+  ],
+  [
+    [0, 0],
+    [1, 1],
+    [1, 2],
+    [1, 3],
+    [0, 4],
+  ],
+  [
+    [2, 0],
+    [1, 1],
+    [1, 2],
+    [1, 3],
+    [2, 4],
+  ],
+  [
+    [0, 0],
+    [0, 1],
+    [2, 2],
+    [0, 3],
+    [0, 4],
+  ],
+  [
+    [2, 0],
+    [2, 1],
+    [0, 2],
+    [2, 3],
+    [2, 4],
+  ],
+  [
+    [1, 0],
+    [0, 1],
+    [2, 2],
+    [0, 3],
+    [1, 4],
+  ],
+  [
+    [1, 0],
+    [2, 1],
+    [0, 2],
+    [2, 3],
+    [1, 4],
+  ],
+  [
+    [0, 0],
+    [2, 1],
+    [0, 2],
+    [2, 3],
+    [0, 4],
+  ],
 ];
 
 const PAYLINE_MULTIPLIERS: Record<3 | 4 | 5, number> = { 3: 2, 4: 5, 5: 25 };
 
 const LEGEND_PAYLINES: { name: string; coords: ReadonlyArray<[number, number]> }[] = [
-  { name: 'Row 1', coords: PAYLINES[0] },
-  { name: 'Row 2', coords: PAYLINES[1] },
-  { name: 'Row 3', coords: PAYLINES[2] },
+  { name: 'Top', coords: PAYLINES[0] },
+  { name: 'Mid', coords: PAYLINES[1] },
+  { name: 'Bot', coords: PAYLINES[2] },
   { name: 'V', coords: PAYLINES[3] },
   { name: 'Inv V', coords: PAYLINES[4] },
+  { name: 'W', coords: PAYLINES[9] },
+  { name: 'M', coords: PAYLINES[10] },
 ];
 
 const UPGRADE_BASE = {
@@ -531,13 +630,41 @@ function cardColor(card: Card): string {
 }
 
 function randomSlotSymbol(): string {
-  return SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
+  let roll = Math.random() * WEIGHTED_SYMBOL_TOTAL;
+  for (const entry of SLOT_SYMBOL_WEIGHTS) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.symbol;
+  }
+  return SLOT_SYMBOL_WEIGHTS[0].symbol;
+}
+
+function applyLuckyPayline(grid: SlotGrid): SlotGrid {
+  const newGrid = grid.map((row) => [...row]) as SlotGrid;
+  const lineIdx = Math.floor(Math.random() * PAYLINES.length);
+  const line = PAYLINES[lineIdx];
+  const sym = randomSlotSymbol();
+  const roll = Math.random();
+  const matchLen: 3 | 4 | 5 = roll < 0.22 ? 5 : roll < 0.52 ? 4 : 3;
+  for (let i = 0; i < matchLen; i++) {
+    const [r, c] = line[i];
+    newGrid[r][c] = sym;
+  }
+  return newGrid;
 }
 
 function generateSlotGrid(): SlotGrid {
-  return Array.from({ length: SLOT_ROWS }, () =>
+  let grid = Array.from({ length: SLOT_ROWS }, () =>
     Array.from({ length: SLOT_COLS }, () => randomSlotSymbol()),
   ) as SlotGrid;
+
+  if (Math.random() < LUCKY_SPIN_CHANCE) {
+    grid = applyLuckyPayline(grid);
+    if (Math.random() < LUCKY_SECOND_LINE_CHANCE) {
+      grid = applyLuckyPayline(grid);
+    }
+  }
+
+  return grid;
 }
 
 function buildColumnStrip(finals: [string, string, string], loops: number): ColumnAnim {
@@ -599,7 +726,11 @@ function evaluateSlotWinsDetailed(
   }
 
   const headline =
-    lines.length === 1 ? lines[0] : `${lines.length} paylines · ${formatMoney(totalPayout)} total`;
+    lines.length === 1
+      ? lines[0]
+      : lines.length <= 3
+        ? lines.join(' · ')
+        : `${lines.length} of ${PAYLINE_COUNT} paylines · ${formatMoney(totalPayout)}`;
   return { payout: totalPayout, summary: headline, wins: slotWins };
 }
 
@@ -953,13 +1084,16 @@ function PaylineOverlay({
           return `${x},${y}`;
         });
         const isInfernoLine = win.count >= INFERNO_MIN_MATCH;
+        const dense = wins.length > 6;
         return (
           <polyline
             key={`line-${win.lineIndex}-${win.count}`}
             points={pts.join(' ')}
             fill="none"
             stroke="url(#infernoGrad)"
-            strokeWidth={infernoActive && isInfernoLine ? 3.2 : 2.2}
+            strokeWidth={
+              dense ? 1.6 : infernoActive && isInfernoLine ? 3.2 : 2.2
+            }
             strokeLinecap="round"
             strokeLinejoin="round"
             filter="url(#infernoGlow)"
@@ -981,35 +1115,51 @@ function PaylineOverlay({
 function PaylineLegend() {
   return (
     <div className="mt-2 px-1">
-      <p className="text-[8px] text-zinc-500 tracking-widest uppercase text-center mb-1.5">
-        Payline Guide
+      <div className="flex items-center justify-center gap-2 mb-1">
+        <span className="text-[9px] font-bold tracking-[0.2em] text-orange-400/90 uppercase">
+          {PAYLINE_COUNT} Paylines Active
+        </span>
+        <span className="text-[7px] px-1.5 py-0.5 rounded bg-orange-950/80 border border-orange-600/40 text-orange-300/90">
+          Loose Odds
+        </span>
+      </div>
+      <svg
+        viewBox="0 0 50 30"
+        className="w-full max-w-[240px] mx-auto h-9 block"
+        aria-label={`${PAYLINE_COUNT} payline patterns`}
+      >
+        {PAYLINES.map((line, idx) => (
+          <polyline
+            key={`all-${idx}`}
+            points={line
+              .map(([r, c]) => `${((c + 0.5) / 5) * 50},${((r + 0.5) / 3) * 30}`)
+              .join(' ')}
+            className="payline-legend-line"
+            style={{ opacity: 0.22 + (idx % 3) * 0.06 }}
+          />
+        ))}
+      </svg>
+      <p className="text-[7px] text-zinc-600 text-center mt-1">
+        3 rows · 2 diagonals · V · M · W · zigzags
       </p>
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap justify-center gap-1.5 mt-1.5">
         {LEGEND_PAYLINES.map((item) => (
           <div
             key={item.name}
-            className="flex flex-col items-center gap-0.5 bg-zinc-900/80 rounded-lg px-1.5 py-1 border border-zinc-700/60"
+            className="flex flex-col items-center gap-0.5 bg-zinc-900/80 rounded px-1 py-0.5 border border-zinc-700/50"
           >
-            <svg viewBox="0 0 50 30" className="w-12 h-7" aria-hidden>
+            <svg viewBox="0 0 50 30" className="w-9 h-5" aria-hidden>
               <polyline
                 points={item.coords
                   .map(([r, c]) => `${((c + 0.5) / 5) * 50},${((r + 0.5) / 3) * 30}`)
                   .join(' ')}
                 className="payline-legend-line"
               />
-              {item.coords.map(([r, c]) => (
-                <circle
-                  key={`${r}-${c}`}
-                  cx={((c + 0.5) / 5) * 50}
-                  cy={((r + 0.5) / 3) * 30}
-                  r={1.8}
-                  fill="rgba(255, 160, 0, 0.7)"
-                />
-              ))}
             </svg>
-            <span className="text-[7px] text-zinc-500 font-medium">{item.name}</span>
+            <span className="text-[6px] text-zinc-500">{item.name}</span>
           </div>
         ))}
+        <span className="text-[6px] text-zinc-600 self-center">+13 more</span>
       </div>
     </div>
   );
@@ -1196,7 +1346,7 @@ function SlotMatrix({
         </div>
         <PaylineLegend />
         <div className="mt-1 flex justify-between px-1">
-          <span className="text-[8px] text-zinc-600 tracking-wider">9 PAYLINES</span>
+          <span className="text-[8px] text-zinc-600 tracking-wider">{PAYLINE_COUNT} PAYLINES</span>
           <span className="text-[8px] text-zinc-600 tracking-wider">4+ INFERNO CASCADE</span>
         </div>
         <div className="mt-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
@@ -1371,9 +1521,11 @@ export default function App() {
     setBlackjackBusy(false);
   }, [blackjackState.gameStatus, cancelDealerTimers]);
 
+  const MAX_FLOAT_MESSAGES = 2;
+
   const addFloat = useCallback((text: string, positive: boolean, fiery = false) => {
     const id = ++floatId.current;
-    setFloatMessages((prev) => [...prev, { id, text, positive, fiery }]);
+    setFloatMessages((prev) => [...prev.slice(-(MAX_FLOAT_MESSAGES - 1)), { id, text, positive, fiery }]);
     setTimeout(() => setFloatMessages((prev) => prev.filter((m) => m.id !== id)), fiery ? 1400 : 1200);
   }, []);
 
@@ -1487,7 +1639,8 @@ export default function App() {
       }, INFERNO_IGNITE_MS);
 
       scheduleSlotCascade(() => {
-        const newGrid = cascadeGrid(grid, burnCells);
+        let newGrid = cascadeGrid(grid, burnCells);
+        if (Math.random() < 0.38) newGrid = applyLuckyPayline(newGrid);
         const fresh: string[] = [];
         const burnedPerCol = Array(SLOT_COLS).fill(0);
         for (const key of burnCells) {
@@ -2107,7 +2260,7 @@ export default function App() {
                 {slotsState.slotResultMessage}
               </p>
               <p className="text-center text-[10px] text-zinc-600 mb-2 shrink-0">
-                9 paylines · 3×2× · 4×5× · 5×25× jackpot
+                {PAYLINE_COUNT} paylines · weighted 🍒🍀🔔 · 3×2× · 4×5× · 5×25×
               </p>
               <GoldButton
                 theme={theme}
