@@ -119,6 +119,10 @@ body,
     stroke-linejoin: round;
   }
 
+  .slot-symbol-wrap svg {
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.65));
+  }
+
   .slot-cell-inferno {
     position: relative;
     z-index: 1;

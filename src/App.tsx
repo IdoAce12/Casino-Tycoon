@@ -5,6 +5,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import {
+  randomSlotSymbol,
+  SLOT_SYMBOLS,
+  SlotSymbolIcon,
+  SYMBOL_LABELS,
+  type SlotSymbolId,
+} from './SlotSymbols';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,14 +38,14 @@ interface BlackjackState {
 }
 
 interface ColumnAnim {
-  strip: string[];
+  strip: SlotSymbolId[];
   targetOffset: number;
   duration: number;
   cellHeight: number;
-  finals: [string, string, string];
+  finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId];
 }
 
-type SlotGrid = [string, string, string, string, string][];
+type SlotGrid = [SlotSymbolId, SlotSymbolId, SlotSymbolId, SlotSymbolId, SlotSymbolId][];
 
 type InfernoPhase = 'idle' | 'ignite' | 'celebrate';
 
@@ -47,7 +54,7 @@ interface SlotWin {
   count: 3 | 4 | 5;
   coords: [number, number][];
   payout: number;
-  symbol: string;
+  symbol: SlotSymbolId;
 }
 
 interface SlotsState {
@@ -291,29 +298,12 @@ const STAGES: StageConfig[] = [
   },
 ];
 
-const SLOT_SYMBOLS = ['🦩', '🍒', '💵', '🎲', '💎', '👑', '🃏', '🎰', '🍀', '🔔'] as const;
 const SLOT_ROWS = 3;
 const SLOT_COLS = 5;
 const SLOT_CELL_H = 52;
 const PAYLINE_COUNT = 20;
 const LUCKY_SPIN_CHANCE = 0.48;
 const LUCKY_SECOND_LINE_CHANCE = 0.32;
-
-/** Common symbols appear 2× more often than rare tier */
-const SLOT_SYMBOL_WEIGHTS: { symbol: (typeof SLOT_SYMBOLS)[number]; weight: number }[] = [
-  { symbol: '🍒', weight: 4 },
-  { symbol: '🍀', weight: 4 },
-  { symbol: '🔔', weight: 4 },
-  { symbol: '💵', weight: 2 },
-  { symbol: '🎲', weight: 2 },
-  { symbol: '🃏', weight: 2 },
-  { symbol: '🦩', weight: 1 },
-  { symbol: '💎', weight: 1 },
-  { symbol: '👑', weight: 1 },
-  { symbol: '🎰', weight: 1 },
-];
-
-const WEIGHTED_SYMBOL_TOTAL = SLOT_SYMBOL_WEIGHTS.reduce((s, e) => s + e.weight, 0);
 
 /** 20 paylines: 3 horizontals, 2 diagonals, 15 structural (V, M, W, zigzags) */
 const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
@@ -618,15 +608,6 @@ function cardColor(card: Card): string {
   return card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-slate-900';
 }
 
-function randomSlotSymbol(): string {
-  let roll = Math.random() * WEIGHTED_SYMBOL_TOTAL;
-  for (const entry of SLOT_SYMBOL_WEIGHTS) {
-    roll -= entry.weight;
-    if (roll <= 0) return entry.symbol;
-  }
-  return SLOT_SYMBOL_WEIGHTS[0].symbol;
-}
-
 function applyLuckyPayline(grid: SlotGrid): SlotGrid {
   const newGrid = grid.map((row) => [...row]) as SlotGrid;
   const lineIdx = Math.floor(Math.random() * PAYLINES.length);
@@ -657,11 +638,11 @@ function generateSlotGrid(): SlotGrid {
 }
 
 function buildColumnStrip(
-  finals: [string, string, string],
+  finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId],
   loops: number,
   cellHeight: number,
 ): ColumnAnim {
-  const strip: string[] = [];
+  const strip: SlotSymbolId[] = [];
   for (let loop = 0; loop < loops; loop++) {
     for (let i = 0; i < SLOT_ROWS; i++) strip.push(randomSlotSymbol());
   }
@@ -676,7 +657,7 @@ function buildColumnStrip(
   };
 }
 
-function countPaylineMatch(symbols: string[]): number {
+function countPaylineMatch(symbols: SlotSymbolId[]): number {
   const first = symbols[0];
   let count = 1;
   for (let i = 1; i < symbols.length; i++) {
@@ -712,7 +693,9 @@ function evaluateSlotWinsDetailed(
         symbol: symbols[0],
       });
       const label = count === 5 ? 'JACKPOT' : `${count}×`;
-      lines.push(`Line ${i + 1}: ${label} ${symbols[0]} → ${formatMoney(linePayout)}`);
+      lines.push(
+        `Line ${i + 1}: ${label} ${SYMBOL_LABELS[symbols[0]]} → ${formatMoney(linePayout)}`,
+      );
     }
   }
 
@@ -1121,7 +1104,7 @@ function SlotColumn({
   burningCells,
   cellHeight,
 }: {
-  columnSymbols: [string, string, string];
+  columnSymbols: [SlotSymbolId, SlotSymbolId, SlotSymbolId];
   anim: ColumnAnim | null;
   spinning: boolean;
   columnIndex: number;
@@ -1174,26 +1157,25 @@ function SlotColumn({
                 : 'none',
             }}
           >
-            {anim!.strip.map((sym, idx) => (
-              <div
-                key={`${columnIndex}-${idx}`}
-                className="flex items-center justify-center select-none leading-none"
-                style={{ height: stripCellH }}
-              >
-                <span
-                  className="drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]"
-                  style={{ fontSize: Math.max(18, Math.min(34, stripCellH * 0.5)) }}
+            {anim!.strip.map((sym, idx) => {
+              const iconSize = Math.max(22, Math.min(36, stripCellH * 0.52));
+              return (
+                <div
+                  key={`${columnIndex}-${idx}`}
+                  className="flex items-center justify-center select-none leading-none"
+                  style={{ height: stripCellH }}
                 >
-                  {sym}
-                </span>
-              </div>
-            ))}
+                  <SlotSymbolIcon symbol={sym} size={iconSize} />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="flex flex-col gap-0 leading-none">
             {displaySymbols.map((sym, row) => {
               const cellKey = `${row},${columnIndex}`;
               const inferno = burningCells.has(cellKey);
+              const iconSize = Math.max(22, Math.min(36, cellHeight * 0.52));
               return (
                 <div
                   key={`${columnIndex}-${row}`}
@@ -1202,14 +1184,11 @@ function SlotColumn({
                   }`}
                   style={{ height: cellHeight }}
                 >
-                  <span
-                    className={`relative z-[3] drop-shadow-[0_0_8px_rgba(212,175,55,0.3)] ${
-                      inferno ? 'animate-inferno-celebrate' : ''
-                    }`}
-                    style={{ fontSize: Math.max(18, Math.min(34, cellHeight * 0.5)) }}
+                  <div
+                    className={`relative z-[3] ${inferno ? 'animate-inferno-celebrate' : ''}`}
                   >
-                    {sym}
-                  </span>
+                    <SlotSymbolIcon symbol={sym} size={iconSize} inferno={inferno} />
+                  </div>
                 </div>
               );
             })}
@@ -1246,7 +1225,7 @@ function SlotMatrix({
   const burnSet = new Set(burningCells);
   const hasInfernoWin = activeWins.some((w) => w.count >= INFERNO_MIN_MATCH);
   const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
-    [grid[0][col], grid[1][col], grid[2][col]] as [string, string, string],
+    [grid[0][col], grid[1][col], grid[2][col]] as [SlotSymbolId, SlotSymbolId, SlotSymbolId],
   );
 
   useEffect(() => {
@@ -1938,9 +1917,9 @@ export default function App() {
     const baseDurations = [1.6, 1.9, 2.2, 2.5, 2.8] as const;
     const columnAnims: ColumnAnim[] = Array.from({ length: SLOT_COLS }, (_, col) => {
       const finals = [finalGrid[0][col], finalGrid[1][col], finalGrid[2][col]] as [
-        string,
-        string,
-        string,
+        SlotSymbolId,
+        SlotSymbolId,
+        SlotSymbolId,
       ];
       const base = buildColumnStrip(finals, 6 + col * 2, cellH);
       return { ...base, duration: baseDurations[col] };
