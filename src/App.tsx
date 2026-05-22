@@ -34,11 +34,13 @@ interface ColumnAnim {
   strip: string[];
   targetOffset: number;
   duration: number;
+  cellHeight: number;
+  finals: [string, string, string];
 }
 
 type SlotGrid = [string, string, string, string, string][];
 
-type InfernoPhase = 'idle' | 'ignite' | 'burn' | 'cascade';
+type InfernoPhase = 'idle' | 'ignite' | 'celebrate';
 
 interface SlotWin {
   lineIndex: number;
@@ -58,8 +60,6 @@ interface SlotsState {
   activeWins: SlotWin[];
   infernoPhase: InfernoPhase;
   burningCells: string[];
-  cascadeFresh: string[];
-  cascadeChain: number;
   pendingBet: number;
 }
 
@@ -473,9 +473,7 @@ const OFFSHORE_PASSIVE_MULT = 2.5;
 const COLUMN_STOP_STAGGER_MS = 420;
 const INFERNO_MIN_MATCH = 4;
 const INFERNO_IGNITE_MS = 700;
-const INFERNO_BURN_MS = 900;
-const INFERNO_CASCADE_MS = 700;
-const MAX_CASCADE_CHAINS = 8;
+const INFERNO_CELEBRATE_MS = 900;
 const MEGA_WIN_MULT = 10;
 const PASSIVE_HEAT_T = 1e12;
 const PASSIVE_HEAT_QA = 1e15;
@@ -658,7 +656,11 @@ function generateSlotGrid(): SlotGrid {
   return grid;
 }
 
-function buildColumnStrip(finals: [string, string, string], loops: number): ColumnAnim {
+function buildColumnStrip(
+  finals: [string, string, string],
+  loops: number,
+  cellHeight: number,
+): ColumnAnim {
   const strip: string[] = [];
   for (let loop = 0; loop < loops; loop++) {
     for (let i = 0; i < SLOT_ROWS; i++) strip.push(randomSlotSymbol());
@@ -667,8 +669,10 @@ function buildColumnStrip(finals: [string, string, string], loops: number): Colu
   const landIndex = strip.length - SLOT_ROWS;
   return {
     strip,
-    targetOffset: -landIndex * SLOT_CELL_H,
+    targetOffset: -landIndex * cellHeight,
     duration: 0,
+    cellHeight,
+    finals,
   };
 }
 
@@ -725,29 +729,12 @@ function evaluateSlotWinsDetailed(
   return { payout: totalPayout, summary: headline, wins: slotWins };
 }
 
-function getInfernoBurnCells(wins: SlotWin[]): string[] {
+function getWinningCells(wins: SlotWin[]): string[] {
   const keys = new Set<string>();
   for (const w of wins) {
-    if (w.count >= INFERNO_MIN_MATCH) {
-      for (const [r, c] of w.coords) keys.add(`${r},${c}`);
-    }
+    for (const [r, c] of w.coords) keys.add(`${r},${c}`);
   }
   return [...keys];
-}
-
-function cascadeGrid(grid: SlotGrid, cellsToRemove: string[]): SlotGrid {
-  const removeSet = new Set(cellsToRemove);
-  const newGrid = grid.map((row) => [...row]) as SlotGrid;
-  for (let col = 0; col < SLOT_COLS; col++) {
-    const kept: string[] = [];
-    for (let row = 0; row < SLOT_ROWS; row++) {
-      if (!removeSet.has(`${row},${col}`)) kept.push(grid[row][col]);
-    }
-    const incoming = Array.from({ length: SLOT_ROWS - kept.length }, () => randomSlotSymbol());
-    const column = [...incoming, ...kept];
-    for (let row = 0; row < SLOT_ROWS; row++) newGrid[row][col] = column[row];
-  }
-  return newGrid;
 }
 
 function getHeatGlowClass(passiveRate: number): string {
@@ -853,8 +840,6 @@ function initialSlots(): SlotsState {
     activeWins: [],
     infernoPhase: 'idle',
     burningCells: [],
-    cascadeFresh: [],
-    cascadeChain: 0,
     pendingBet: 0,
   };
 }
@@ -1133,26 +1118,25 @@ function SlotColumn({
   anim,
   spinning,
   columnIndex,
-  stopped,
   burningCells,
-  cascadeFresh,
   cellHeight,
 }: {
   columnSymbols: [string, string, string];
   anim: ColumnAnim | null;
   spinning: boolean;
   columnIndex: number;
-  stopped: boolean;
   burningCells: Set<string>;
-  cascadeFresh: Set<string>;
   cellHeight: number;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-  const viewportH = cellHeight * SLOT_ROWS;
+  const stripCellH = anim?.cellHeight ?? cellHeight;
+  const viewportH = stripCellH * SLOT_ROWS;
+  const showReelStrip = Boolean(anim && spinning);
+  const displaySymbols = showReelStrip ? anim!.finals : columnSymbols;
 
   useEffect(() => {
-    if (!anim || !spinning || stopped) {
+    if (!anim || !spinning) {
       setOffset(0);
       setTransitioning(false);
       return;
@@ -1166,14 +1150,13 @@ function SlotColumn({
       });
     });
     return () => cancelAnimationFrame(startId);
-  }, [anim, spinning, stopped]);
+  }, [anim, spinning]);
 
   const duration = anim?.duration ?? 2.2;
-  const isAnimating = anim && spinning && !stopped;
 
   return (
     <div
-      className="relative flex-1 min-w-0 max-w-[64px] rounded-lg overflow-hidden border-2 border-zinc-600 bg-[#050a12] shadow-[inset_0_0_20px_rgba(0,0,0,1)]"
+      className="relative flex-1 min-w-0 rounded-sm overflow-hidden border border-zinc-600 bg-[#050a12] shadow-[inset_0_0_16px_rgba(0,0,0,1)]"
       style={{ height: viewportH }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
@@ -1181,25 +1164,25 @@ function SlotColumn({
       <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
       <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-gold/30 z-20 pointer-events-none" />
       <div className="absolute inset-0 overflow-hidden">
-        {isAnimating ? (
+        {showReelStrip ? (
           <div
             className="reel-strip"
             style={{
               transform: `translate3d(0, ${offset}px, 0)`,
               transition: transitioning
-                ? `transform ${duration}s cubic-bezier(0.12, 0.75, 0.18, 1)`
+                ? `transform ${duration}s cubic-bezier(0.12, 0.72, 0.2, 1)`
                 : 'none',
             }}
           >
-            {anim.strip.map((sym, idx) => (
+            {anim!.strip.map((sym, idx) => (
               <div
                 key={`${columnIndex}-${idx}`}
-                className="flex items-center justify-center select-none"
-                style={{ height: cellHeight }}
+                className="flex items-center justify-center select-none leading-none"
+                style={{ height: stripCellH }}
               >
                 <span
                   className="drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]"
-                  style={{ fontSize: Math.max(18, Math.min(32, cellHeight * 0.48)) }}
+                  style={{ fontSize: Math.max(18, Math.min(34, stripCellH * 0.5)) }}
                 >
                   {sym}
                 </span>
@@ -1207,35 +1190,31 @@ function SlotColumn({
             ))}
           </div>
         ) : (
-          <div className="flex flex-col">
-            {columnSymbols.map((sym, row) => {
+          <div className="flex flex-col gap-0 leading-none">
+            {displaySymbols.map((sym, row) => {
               const cellKey = `${row},${columnIndex}`;
-              const burning = burningCells.has(cellKey);
-              const fresh = cascadeFresh.has(cellKey);
+              const inferno = burningCells.has(cellKey);
               return (
                 <div
                   key={`${columnIndex}-${row}`}
                   className={`flex items-center justify-center select-none relative ${
-                    burning ? 'slot-cell-burning animate-inferno-burn' : ''
-                  } ${fresh ? 'animate-cascade-drop' : ''}`}
+                    inferno ? 'slot-cell-inferno' : ''
+                  }`}
                   style={{ height: cellHeight }}
                 >
-                  {!burning && (
-                    <span
-                      className="drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]"
-                      style={{ fontSize: Math.max(18, Math.min(32, cellHeight * 0.48)) }}
-                    >
-                      {sym}
-                    </span>
-                  )}
+                  <span
+                    className={`relative z-[3] drop-shadow-[0_0_8px_rgba(212,175,55,0.3)] ${
+                      inferno ? 'animate-inferno-celebrate' : ''
+                    }`}
+                    style={{ fontSize: Math.max(18, Math.min(34, cellHeight * 0.5)) }}
+                  >
+                    {sym}
+                  </span>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
-      <div className="absolute bottom-0.5 inset-x-0 flex justify-center z-10 pointer-events-none">
-        <span className="text-[6px] text-zinc-600 font-mono tracking-widest">COL {columnIndex + 1}</span>
       </div>
     </div>
   );
@@ -1250,7 +1229,7 @@ function SlotMatrix({
   activeWins,
   infernoPhase,
   burningCells,
-  cascadeFresh,
+  onCellHeight,
 }: {
   theme: StageTheme;
   grid: SlotGrid;
@@ -1260,12 +1239,11 @@ function SlotMatrix({
   activeWins: SlotWin[];
   infernoPhase: InfernoPhase;
   burningCells: string[];
-  cascadeFresh: string[];
+  onCellHeight: (height: number) => void;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [cellHeight, setCellHeight] = useState(SLOT_CELL_H);
   const burnSet = new Set(burningCells);
-  const freshSet = new Set(cascadeFresh);
   const hasInfernoWin = activeWins.some((w) => w.count >= INFERNO_MIN_MATCH);
   const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
     [grid[0][col], grid[1][col], grid[2][col]] as [string, string, string],
@@ -1276,19 +1254,23 @@ function SlotMatrix({
     if (!el) return;
     const measure = () => {
       const h = el.clientHeight;
-      if (h > 0) setCellHeight(Math.max(44, Math.floor(h / SLOT_ROWS)));
+      if (h > 0) {
+        const next = Math.max(44, Math.floor(h / SLOT_ROWS));
+        setCellHeight(next);
+        onCellHeight(next);
+      }
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [onCellHeight]);
 
   return (
     <div className={`relative w-full h-full mx-auto theme-transition ${theme.slotGlow}`}>
       <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
       <div
-        className={`theme-transition relative h-full flex flex-col rounded-2xl border-2 p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] ${theme.slotFrame} ${theme.slotCabinet}`}
+        className={`theme-transition relative h-full flex flex-col rounded-xl border-2 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] ${theme.slotFrame} ${theme.slotCabinet}`}
       >
         <div className="flex items-center justify-between px-1 mb-1 shrink-0">
           <span className={`text-[9px] font-bold tracking-[0.2em] uppercase ${theme.title}`}>
@@ -1311,9 +1293,9 @@ function SlotMatrix({
         </div>
         <div
           ref={gridRef}
-          className="relative flex-1 min-h-0 rounded-xl border border-zinc-700 bg-black p-1 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]"
+          className="relative flex-1 min-h-0 rounded-lg border border-zinc-700 bg-black p-0.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]"
         >
-          <div className="flex gap-1 justify-center w-full h-full relative">
+          <div className="flex gap-px justify-center w-full h-full relative">
             {columns.map((colSyms, i) => (
               <SlotColumn
                 key={i}
@@ -1321,9 +1303,7 @@ function SlotMatrix({
                 columnSymbols={colSyms}
                 anim={columnAnims?.[i] ?? null}
                 spinning={spinning && columnAnims !== null}
-                stopped={!spinning || i < stoppedColumns}
                 burningCells={burnSet}
-                cascadeFresh={freshSet}
                 cellHeight={cellHeight}
               />
             ))}
@@ -1378,6 +1358,7 @@ export default function App() {
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slotCascadeTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const slotsCellHeightRef = useRef(SLOT_CELL_H);
   const dealerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerFailsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerSeqRef = useRef(0);
@@ -1443,7 +1424,6 @@ export default function App() {
         activeWins: [],
         infernoPhase: 'idle',
         burningCells: [],
-        cascadeFresh: [],
         persistentWinMessage: '',
         slotResultMessage: 'New venue unlocked. 3×5 matrix recalibrated.',
       }));
@@ -1546,8 +1526,19 @@ export default function App() {
     setTimeout(() => setNaturalBjFire(false), 3200);
   }, []);
 
+  const handleSlotsCellHeight = useCallback((height: number) => {
+    slotsCellHeightRef.current = height;
+  }, []);
+
   const finalizeSlotsRound = useCallback(
-    (totalPayout: number, bet: number, summary: string, finalGrid: SlotGrid) => {
+    (
+      totalPayout: number,
+      bet: number,
+      summary: string,
+      finalGrid: SlotGrid,
+      wins: SlotWin[],
+      celebrateCells: string[],
+    ) => {
       const net = totalPayout - bet;
       if (net > 0) {
         feedbackWin(net, bet);
@@ -1561,11 +1552,9 @@ export default function App() {
         isSpinning: false,
         columnAnims: null,
         stoppedColumns: SLOT_COLS,
-        activeWins: [],
-        infernoPhase: 'idle',
-        burningCells: [],
-        cascadeFresh: [],
-        cascadeChain: 0,
+        activeWins: wins,
+        infernoPhase: totalPayout > 0 ? 'celebrate' : 'idle',
+        burningCells: celebrateCells,
         pendingBet: 0,
         slotResultMessage: summary,
         persistentWinMessage: formatPersistentWin(totalPayout, bet),
@@ -1574,12 +1563,10 @@ export default function App() {
     [feedbackWin, feedbackLoss],
   );
 
-  const runInfernoResolution = useCallback(
-    (grid: SlotGrid, bet: number, chain: number, accumulated: number) => {
+  const resolveSlotsOutcome = useCallback(
+    (grid: SlotGrid, bet: number) => {
       const { payout, summary, wins } = evaluateSlotWinsDetailed(grid, bet);
-      const totalAcc = accumulated + payout;
-      const burnCells = getInfernoBurnCells(wins);
-      const canCascade = burnCells.length > 0 && chain < MAX_CASCADE_CHAINS;
+      const celebrateCells = payout > 0 ? getWinningCells(wins) : [];
 
       setSlotsState((s) => ({
         ...s,
@@ -1587,71 +1574,15 @@ export default function App() {
         activeWins: wins,
         infernoPhase: payout > 0 ? 'ignite' : 'idle',
         burningCells: [],
-        cascadeFresh: [],
-        cascadeChain: chain,
         pendingBet: bet,
-        slotResultMessage:
-          chain > 0
-            ? `Inferno chain ×${chain + 1} · ${formatMoney(totalAcc)}`
-            : summary,
+        slotResultMessage: summary,
       }));
 
-      if (payout === 0 && chain === 0) {
-        finalizeSlotsRound(0, bet, summary, grid);
-        return;
-      }
-
-      if (payout === 0 && chain > 0) {
-        finalizeSlotsRound(
-          accumulated,
-          bet,
-          `Inferno ×${chain + 1} complete · ${formatMoney(accumulated)}`,
-          grid,
-        );
-        return;
-      }
-
-      if (!canCascade) {
-        const finalSummary =
-          chain > 0
-            ? `Inferno ×${chain + 1} complete · ${formatMoney(totalAcc)}`
-            : summary;
-        scheduleSlotCascade(
-          () => finalizeSlotsRound(totalAcc, bet, finalSummary, grid),
-          payout > 0 ? INFERNO_IGNITE_MS + 500 : 0,
-        );
-        return;
-      }
-
-      scheduleSlotCascade(() => {
-        setSlotsState((s) => ({ ...s, infernoPhase: 'burn', burningCells: burnCells }));
-      }, INFERNO_IGNITE_MS);
-
-      scheduleSlotCascade(() => {
-        let newGrid = cascadeGrid(grid, burnCells);
-        if (Math.random() < 0.38) newGrid = applyLuckyPayline(newGrid);
-        const fresh: string[] = [];
-        const burnedPerCol = Array(SLOT_COLS).fill(0);
-        for (const key of burnCells) {
-          const [, c] = key.split(',').map(Number);
-          burnedPerCol[c]++;
-        }
-        for (let col = 0; col < SLOT_COLS; col++) {
-          for (let row = 0; row < burnedPerCol[col]; row++) fresh.push(`${row},${col}`);
-        }
-        setSlotsState((s) => ({
-          ...s,
-          grid: newGrid,
-          infernoPhase: 'cascade',
-          burningCells: [],
-          cascadeFresh: fresh,
-          slotResultMessage: `Cascade ${chain + 2} — symbols falling…`,
-        }));
-        scheduleSlotCascade(() => {
-          setSlotsState((s) => ({ ...s, cascadeFresh: [] }));
-          runInfernoResolution(newGrid, bet, chain + 1, totalAcc);
-        }, INFERNO_CASCADE_MS);
-      }, INFERNO_IGNITE_MS + INFERNO_BURN_MS);
+      const delay = payout > 0 ? INFERNO_IGNITE_MS + INFERNO_CELEBRATE_MS : 0;
+      scheduleSlotCascade(
+        () => finalizeSlotsRound(payout, bet, summary, grid, wins, celebrateCells),
+        delay,
+      );
     },
     [finalizeSlotsRound, scheduleSlotCascade],
   );
@@ -2003,6 +1934,7 @@ export default function App() {
     if (bet < minBet || playerMoney < bet) return;
 
     const finalGrid = generateSlotGrid();
+    const cellH = slotsCellHeightRef.current;
     const baseDurations = [1.6, 1.9, 2.2, 2.5, 2.8] as const;
     const columnAnims: ColumnAnim[] = Array.from({ length: SLOT_COLS }, (_, col) => {
       const finals = [finalGrid[0][col], finalGrid[1][col], finalGrid[2][col]] as [
@@ -2010,7 +1942,7 @@ export default function App() {
         string,
         string,
       ];
-      const base = buildColumnStrip(finals, 6 + col * 2);
+      const base = buildColumnStrip(finals, 6 + col * 2, cellH);
       return { ...base, duration: baseDurations[col] };
     });
 
@@ -2026,8 +1958,6 @@ export default function App() {
       activeWins: [],
       infernoPhase: 'idle',
       burningCells: [],
-      cascadeFresh: [],
-      cascadeChain: 0,
       pendingBet: bet,
     });
 
@@ -2043,7 +1973,7 @@ export default function App() {
         columnAnims: null,
         stoppedColumns: SLOT_COLS,
       }));
-      runInfernoResolution(finalGrid, bet, 0, 0);
+      resolveSlotsOutcome(finalGrid, bet);
     };
 
     const maxMs = Math.max(...baseDurations) * 1000 + 200;
@@ -2071,7 +2001,6 @@ export default function App() {
       activeWins: [],
       infernoPhase: 'idle',
       burningCells: [],
-      cascadeFresh: [],
       persistentWinMessage: '',
     }));
   };
@@ -2079,18 +2008,13 @@ export default function App() {
   const theme = stage.theme;
   const heatGlow = getHeatGlowClass(passiveIncomeRate);
   const slotsResolving =
-    slotsState.infernoPhase !== 'idle' ||
-    (slotsState.activeWins.length > 0 && !slotsState.isSpinning);
+    slotsState.infernoPhase === 'ignite' && !slotsState.isSpinning;
 
   const slotsLiveStatus = slotsState.isSpinning
     ? 'Reels locking…'
     : slotsState.infernoPhase === 'ignite'
       ? 'Inferno ignite! 🔥'
-      : slotsState.infernoPhase === 'burn'
-        ? 'Symbols burning…'
-        : slotsState.infernoPhase === 'cascade'
-          ? 'Cascade drop…'
-          : null;
+      : null;
 
   const slotsWinDisplay =
     slotsState.isSpinning || slotsResolving
@@ -2273,7 +2197,7 @@ export default function App() {
                   activeWins={slotsState.activeWins}
                   infernoPhase={slotsState.infernoPhase}
                   burningCells={slotsState.burningCells}
-                  cascadeFresh={slotsState.cascadeFresh}
+                  onCellHeight={handleSlotsCellHeight}
                 />
               </div>
 

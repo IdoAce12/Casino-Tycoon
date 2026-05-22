@@ -40,7 +40,7 @@ export default {
         'card-deal': 'cardDeal 0.35s ease-out forwards',
         'win-shake': 'winShake 0.55s ease-in-out',
         'inferno-line': 'infernoLine 0.85s ease-in-out infinite',
-        'inferno-burn': 'infernoBurn 0.75s ease-in forwards',
+        'inferno-celebrate': 'infernoCelebrate 1.1s ease-in-out infinite',
         'inferno-brand-pulse': 'infernoBrandPulse 2s ease-in-out infinite',
         'card-inferno': 'cardInferno 1.2s ease-in-out infinite',
         'heat-glow-t': 'heatGlowT 2.5s ease-in-out infinite',
