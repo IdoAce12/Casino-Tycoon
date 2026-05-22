@@ -46,6 +46,8 @@ export default {
         'heat-glow-t': 'heatGlowT 2.5s ease-in-out infinite',
         'heat-glow-qa': 'heatGlowQa 2s ease-in-out infinite',
         'cascade-drop': 'cascadeDrop 0.45s ease-out forwards',
+        'neon-cabinet-pulse': 'neonCabinetPulse 2.5s ease-in-out infinite',
+        'royale-shimmer': 'royaleShimmer 3s ease-in-out infinite',
       },
       keyframes: {
         flashWin: {
@@ -126,6 +128,14 @@ export default {
         cascadeDrop: {
           '0%': { opacity: '0', transform: 'translateY(-12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        neonCabinetPulse: {
+          '0%, 100%': { opacity: '0.55', filter: 'brightness(1)' },
+          '50%': { opacity: '1', filter: 'brightness(1.15)' },
+        },
+        royaleShimmer: {
+          '0%, 100%': { opacity: '0.5' },
+          '50%': { opacity: '0.95' },
         },
       },
     },

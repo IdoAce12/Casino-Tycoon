@@ -6,12 +6,19 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  generateSlotGrid,
+  PAYLINE_COUNT,
+  PAYLINES,
+  countPaylineMatch,
+  paylinePayoutMultiplier,
   randomSlotSymbol,
   SLOT_SYMBOLS,
   SlotSymbolIcon,
   SYMBOL_LABELS,
+  type SlotGrid,
   type SlotSymbolId,
 } from './SlotSymbols';
+import { SLOT_CABINET_BY_STAGE } from './slotCabinet';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -45,13 +52,11 @@ interface ColumnAnim {
   finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId];
 }
 
-type SlotGrid = [SlotSymbolId, SlotSymbolId, SlotSymbolId, SlotSymbolId, SlotSymbolId][];
-
 type InfernoPhase = 'idle' | 'ignite' | 'celebrate';
 
 interface SlotWin {
   lineIndex: number;
-  count: 3 | 4 | 5;
+  count: 2 | 3 | 4 | 5;
   coords: [number, number][];
   payout: number;
   symbol: SlotSymbolId;
@@ -176,7 +181,7 @@ const STAGES: StageConfig[] = [
   {
     id: 1,
     name: 'Neon Sports Bar',
-    unlockCost: 2500,
+    unlockCost: 5000,
     minBet: 50,
     symbols: ['🦩', '🍒', '💵'],
     theme: {
@@ -217,7 +222,7 @@ const STAGES: StageConfig[] = [
   {
     id: 2,
     name: 'The Syndicate Lounge',
-    unlockCost: 25000,
+    unlockCost: 75000,
     minBet: 500,
     symbols: ['🎲', '💎', '👑'],
     theme: {
@@ -258,7 +263,7 @@ const STAGES: StageConfig[] = [
   {
     id: 3,
     name: 'Casino Royale Vegas',
-    unlockCost: 250000,
+    unlockCost: 500000,
     minBet: 5000,
     symbols: ['🃏', '🦚', '🎰'],
     theme: {
@@ -301,162 +306,18 @@ const STAGES: StageConfig[] = [
 const SLOT_ROWS = 3;
 const SLOT_COLS = 5;
 const SLOT_CELL_H = 52;
-const PAYLINE_COUNT = 20;
-const LUCKY_SPIN_CHANCE = 0.48;
-const LUCKY_SECOND_LINE_CHANCE = 0.32;
 
-/** 20 paylines: 3 horizontals, 2 diagonals, 15 structural (V, M, W, zigzags) */
-const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
-  [
-    [0, 0],
-    [0, 1],
-    [0, 2],
-    [0, 3],
-    [0, 4],
-  ],
-  [
-    [1, 0],
-    [1, 1],
-    [1, 2],
-    [1, 3],
-    [1, 4],
-  ],
-  [
-    [2, 0],
-    [2, 1],
-    [2, 2],
-    [2, 3],
-    [2, 4],
-  ],
-  [
-    [0, 0],
-    [1, 1],
-    [2, 2],
-    [1, 3],
-    [0, 4],
-  ],
-  [
-    [2, 0],
-    [1, 1],
-    [0, 2],
-    [1, 3],
-    [2, 4],
-  ],
-  [
-    [0, 0],
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [2, 4],
-  ],
-  [
-    [2, 0],
-    [2, 1],
-    [1, 2],
-    [0, 3],
-    [0, 4],
-  ],
-  [
-    [1, 0],
-    [0, 1],
-    [0, 2],
-    [0, 3],
-    [1, 4],
-  ],
-  [
-    [1, 0],
-    [2, 1],
-    [2, 2],
-    [2, 3],
-    [1, 4],
-  ],
-  [
-    [0, 0],
-    [1, 1],
-    [0, 2],
-    [1, 3],
-    [0, 4],
-  ],
-  [
-    [2, 0],
-    [1, 1],
-    [2, 2],
-    [1, 3],
-    [2, 4],
-  ],
-  [
-    [1, 0],
-    [1, 1],
-    [0, 2],
-    [1, 3],
-    [1, 4],
-  ],
-  [
-    [1, 0],
-    [1, 1],
-    [2, 2],
-    [1, 3],
-    [1, 4],
-  ],
-  [
-    [0, 0],
-    [1, 1],
-    [1, 2],
-    [1, 3],
-    [0, 4],
-  ],
-  [
-    [2, 0],
-    [1, 1],
-    [1, 2],
-    [1, 3],
-    [2, 4],
-  ],
-  [
-    [0, 0],
-    [0, 1],
-    [2, 2],
-    [0, 3],
-    [0, 4],
-  ],
-  [
-    [2, 0],
-    [2, 1],
-    [0, 2],
-    [2, 3],
-    [2, 4],
-  ],
-  [
-    [1, 0],
-    [0, 1],
-    [2, 2],
-    [0, 3],
-    [1, 4],
-  ],
-  [
-    [1, 0],
-    [2, 1],
-    [0, 2],
-    [2, 3],
-    [1, 4],
-  ],
-  [
-    [0, 0],
-    [2, 1],
-    [0, 2],
-    [2, 3],
-    [0, 4],
-  ],
-];
-
-const PAYLINE_MULTIPLIERS: Record<3 | 4 | 5, number> = { 3: 2, 4: 5, 5: 25 };
+/** Passive yield per stage — higher venues tax empire cash flow until tables pay off */
+const STAGE_PASSIVE_EFFICIENCY = [1, 0.82, 0.68, 0.55] as const;
+const STAGE_TRANSITION_TAX = 0.12;
+const SHOP_COST_POWER = 1.8;
 
 const UPGRADE_BASE = {
-  hustler: { cost: 75, income: 2 },
-  ownership: { cost: 2500, income: 15 },
-  hftBot: { cost: 12_500_000, income: 35, compoundPerLevel: 0.03 },
+  hustler: { cost: 120, income: 1 },
+  ownership: { cost: 3500, income: 8 },
+  hftBot: { cost: 12_500_000, income: 22, compoundPerLevel: 0.02 },
   offshore: { cost: 2_500_000_000, maxLevel: 1 },
-  megaResort: { cost: 8e12, income: 2_500_000 },
+  megaResort: { cost: 8e12, income: 1_200_000 },
 };
 
 const OFFSHORE_PASSIVE_MULT = 2.5;
@@ -608,35 +469,6 @@ function cardColor(card: Card): string {
   return card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-slate-900';
 }
 
-function applyLuckyPayline(grid: SlotGrid): SlotGrid {
-  const newGrid = grid.map((row) => [...row]) as SlotGrid;
-  const lineIdx = Math.floor(Math.random() * PAYLINES.length);
-  const line = PAYLINES[lineIdx];
-  const sym = randomSlotSymbol();
-  const roll = Math.random();
-  const matchLen: 3 | 4 | 5 = roll < 0.22 ? 5 : roll < 0.52 ? 4 : 3;
-  for (let i = 0; i < matchLen; i++) {
-    const [r, c] = line[i];
-    newGrid[r][c] = sym;
-  }
-  return newGrid;
-}
-
-function generateSlotGrid(): SlotGrid {
-  let grid = Array.from({ length: SLOT_ROWS }, () =>
-    Array.from({ length: SLOT_COLS }, () => randomSlotSymbol()),
-  ) as SlotGrid;
-
-  if (Math.random() < LUCKY_SPIN_CHANCE) {
-    grid = applyLuckyPayline(grid);
-    if (Math.random() < LUCKY_SECOND_LINE_CHANCE) {
-      grid = applyLuckyPayline(grid);
-    }
-  }
-
-  return grid;
-}
-
 function buildColumnStrip(
   finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId],
   loops: number,
@@ -657,16 +489,6 @@ function buildColumnStrip(
   };
 }
 
-function countPaylineMatch(symbols: SlotSymbolId[]): number {
-  const first = symbols[0];
-  let count = 1;
-  for (let i = 1; i < symbols.length; i++) {
-    if (symbols[i] === first) count++;
-    else break;
-  }
-  return count >= 3 ? count : 0;
-}
-
 function evaluateSlotWinsDetailed(
   grid: SlotGrid,
   bet: number,
@@ -679,10 +501,10 @@ function evaluateSlotWinsDetailed(
     const line = PAYLINES[i];
     const symbols = line.map(([r, c]) => grid[r][c]);
     const count = countPaylineMatch(symbols);
-    if (count >= 3) {
-      const matchCount = count as 3 | 4 | 5;
-      const mult = PAYLINE_MULTIPLIERS[matchCount];
-      const linePayout = bet * mult;
+    if (count >= 2) {
+      const matchCount = count as 2 | 3 | 4 | 5;
+      const mult = paylinePayoutMultiplier(count);
+      const linePayout = Math.floor(bet * mult);
       totalPayout += linePayout;
       const coords = line.slice(0, count) as [number, number][];
       slotWins.push({
@@ -692,7 +514,8 @@ function evaluateSlotWinsDetailed(
         payout: linePayout,
         symbol: symbols[0],
       });
-      const label = count === 5 ? 'JACKPOT' : `${count}×`;
+      const label =
+        count === 5 ? 'JACKPOT' : count === 2 ? '2× (partial)' : `${count}×`;
       lines.push(
         `Line ${i + 1}: ${label} ${SYMBOL_LABELS[symbols[0]]} → ${formatMoney(linePayout)}`,
       );
@@ -1103,6 +926,7 @@ function SlotColumn({
   columnIndex,
   burningCells,
   cellHeight,
+  reelCell,
 }: {
   columnSymbols: [SlotSymbolId, SlotSymbolId, SlotSymbolId];
   anim: ColumnAnim | null;
@@ -1110,6 +934,7 @@ function SlotColumn({
   columnIndex: number;
   burningCells: Set<string>;
   cellHeight: number;
+  reelCell: string;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
@@ -1139,7 +964,7 @@ function SlotColumn({
 
   return (
     <div
-      className="relative flex-1 min-w-0 rounded-sm overflow-hidden border border-zinc-600 bg-[#050a12] shadow-[inset_0_0_16px_rgba(0,0,0,1)]"
+      className={`relative flex-1 min-w-0 rounded-sm overflow-hidden border ${reelCell}`}
       style={{ height: viewportH }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
@@ -1201,6 +1026,7 @@ function SlotColumn({
 
 function SlotMatrix({
   theme,
+  stageIndex,
   grid,
   spinning,
   columnAnims,
@@ -1211,6 +1037,7 @@ function SlotMatrix({
   onCellHeight,
 }: {
   theme: StageTheme;
+  stageIndex: number;
   grid: SlotGrid;
   spinning: boolean;
   columnAnims: ColumnAnim[] | null;
@@ -1220,6 +1047,7 @@ function SlotMatrix({
   burningCells: string[];
   onCellHeight: (height: number) => void;
 }) {
+  const cabinet = SLOT_CABINET_BY_STAGE[Math.min(stageIndex, SLOT_CABINET_BY_STAGE.length - 1)];
   const gridRef = useRef<HTMLDivElement>(null);
   const [cellHeight, setCellHeight] = useState(SLOT_CELL_H);
   const burnSet = new Set(burningCells);
@@ -1247,12 +1075,20 @@ function SlotMatrix({
 
   return (
     <div className={`relative w-full h-full mx-auto theme-transition ${theme.slotGlow}`}>
-      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
       <div
-        className={`theme-transition relative h-full flex flex-col rounded-xl border-2 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] ${theme.slotFrame} ${theme.slotCabinet}`}
+        className={`absolute -inset-1 rounded-2xl bg-gradient-to-b opacity-80 blur-md pointer-events-none ${cabinet.outerAura}`}
+      />
+      <div
+        className={`theme-transition relative h-full flex flex-col rounded-xl border-2 p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.1)] ${theme.slotFrame} ${cabinet.shell}`}
       >
-        <div className="flex items-center justify-between px-1 mb-1 shrink-0">
-          <span className={`text-[9px] font-bold tracking-[0.2em] uppercase ${theme.title}`}>
+        {cabinet.decorClass && (
+          <div
+            className={`absolute inset-0 rounded-xl pointer-events-none z-0 overflow-hidden ${cabinet.decorClass}`}
+            aria-hidden
+          />
+        )}
+        <div className="flex items-center justify-between px-1 mb-1 shrink-0 relative z-[2]">
+          <span className={`text-[9px] font-bold tracking-[0.2em] uppercase ${cabinet.badge}`}>
             VIP · 3×5
           </span>
           <div className="flex gap-0.5">
@@ -1272,7 +1108,7 @@ function SlotMatrix({
         </div>
         <div
           ref={gridRef}
-          className="relative flex-1 min-h-0 rounded-lg border border-zinc-700 bg-black p-0.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]"
+          className={`relative flex-1 min-h-0 rounded-lg border p-0.5 z-[1] ${cabinet.gridWindow}`}
         >
           <div className="flex gap-px justify-center w-full h-full relative">
             {columns.map((colSyms, i) => (
@@ -1284,6 +1120,7 @@ function SlotMatrix({
                 spinning={spinning && columnAnims !== null}
                 burningCells={burnSet}
                 cellHeight={cellHeight}
+                reelCell={cabinet.reelCell}
               />
             ))}
           </div>
@@ -1295,9 +1132,9 @@ function SlotMatrix({
             />
           )}
         </div>
-        <div className="mt-1 h-0.5 rounded-full bg-zinc-800 overflow-hidden shrink-0">
+        <div className="mt-1 h-0.5 rounded-full bg-zinc-800/80 overflow-hidden shrink-0 relative z-[2]">
           <div
-            className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light transition-all ease-out ${spinning ? 'w-full' : 'w-0'}`}
+            className={`h-full bg-gradient-to-r transition-all ease-out ${cabinet.progressBar} ${spinning ? 'w-full' : 'w-0'}`}
             style={{ transitionDuration: spinning ? '3800ms' : '300ms' }}
           />
         </div>
@@ -1364,17 +1201,20 @@ export default function App() {
   }, []);
 
   const recalcPassive = useCallback((upgrades: UpgradesBought, stageIdx: number) => {
-    const stageMult = 1 + stageIdx * 0.5;
+    const stageMult = 1 + stageIdx * 0.22;
     const hustlerIncome = upgrades.hustler * UPGRADE_BASE.hustler.income * stageMult;
     const ownershipIncome = upgrades.ownership
-      ? UPGRADE_BASE.ownership.income * Math.pow(2, upgrades.ownership) * stageMult
+      ? UPGRADE_BASE.ownership.income *
+        Math.pow(1.35, upgrades.ownership) *
+        stageMult
       : 0;
     const hftIncome = upgrades.hftBot * UPGRADE_BASE.hftBot.income * stageMult;
     const megaIncome = upgrades.megaResort * UPGRADE_BASE.megaResort.income * stageMult;
     const hftCompound = Math.pow(1 + UPGRADE_BASE.hftBot.compoundPerLevel, upgrades.hftBot);
     let rate = (hustlerIncome + ownershipIncome + hftIncome + megaIncome) * hftCompound;
     if (upgrades.offshore > 0) rate *= OFFSHORE_PASSIVE_MULT;
-    return rate;
+    rate *= STAGE_PASSIVE_EFFICIENCY[Math.min(stageIdx, 3)];
+    return Math.max(0, Math.floor(rate));
   }, []);
 
   useEffect(() => {
@@ -1569,11 +1409,9 @@ export default function App() {
   const upgradeCost = (key: UpgradeKey): number => {
     const base = UPGRADE_BASE[key].cost;
     const count = upgradesBought[key];
-    const stageScale = 1 + currentStage * 0.35;
+    const stageScale = 1 + currentStage * 0.55;
     if (key === 'offshore') return Math.floor(base * stageScale);
-    if (key === 'megaResort') return Math.floor(base * Math.pow(1.85, count) * stageScale);
-    if (key === 'hftBot') return Math.floor(base * Math.pow(1.65, count) * stageScale);
-    return Math.floor(base * Math.pow(1.5, count) * stageScale);
+    return Math.floor(base * Math.pow(SHOP_COST_POWER, count) * stageScale);
   };
 
   const buyUpgrade = (key: UpgradeKey) => {
@@ -1969,6 +1807,9 @@ export default function App() {
 
   const selectStage = (idx: number) => {
     if (lifetimePeakMoney < STAGES[idx].unlockCost) return;
+    if (idx !== currentStage) {
+      setPlayerMoney((m) => Math.max(0, Math.floor(m * (1 - STAGE_TRANSITION_TAX))));
+    }
     setCurrentStage(idx);
     setCurrentBet(Math.max(currentBet, STAGES[idx].minBet));
     setSlotsState((s) => ({
@@ -2169,6 +2010,7 @@ export default function App() {
               <div className="flex-1 min-h-0 flex items-stretch justify-center py-0.5">
                 <SlotMatrix
                   theme={theme}
+                  stageIndex={currentStage}
                   grid={slotsState.grid}
                   spinning={slotsState.isSpinning}
                   columnAnims={slotsState.columnAnims}
