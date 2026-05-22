@@ -52,6 +52,7 @@ interface SlotsState {
   grid: SlotGrid;
   isSpinning: boolean;
   slotResultMessage: string;
+  persistentWinMessage: string;
   columnAnims: ColumnAnim[] | null;
   stoppedColumns: number;
   activeWins: SlotWin[];
@@ -460,16 +461,6 @@ const PAYLINES: ReadonlyArray<ReadonlyArray<[number, number]>> = [
 
 const PAYLINE_MULTIPLIERS: Record<3 | 4 | 5, number> = { 3: 2, 4: 5, 5: 25 };
 
-const LEGEND_PAYLINES: { name: string; coords: ReadonlyArray<[number, number]> }[] = [
-  { name: 'Top', coords: PAYLINES[0] },
-  { name: 'Mid', coords: PAYLINES[1] },
-  { name: 'Bot', coords: PAYLINES[2] },
-  { name: 'V', coords: PAYLINES[3] },
-  { name: 'Inv V', coords: PAYLINES[4] },
-  { name: 'W', coords: PAYLINES[9] },
-  { name: 'M', coords: PAYLINES[10] },
-];
-
 const UPGRADE_BASE = {
   hustler: { cost: 75, income: 2 },
   ownership: { cost: 2500, income: 15 },
@@ -765,6 +756,30 @@ function getHeatGlowClass(passiveRate: number): string {
   return '';
 }
 
+function buildWagerJumps(
+  balance: number,
+  minBet: number,
+  stageIdx: number,
+): { label: string; amount: number }[] {
+  const stageCeiling = [1e6, 1e9, 1e12, 1e18][stageIdx] ?? 1e18;
+  const presets = [
+    1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
+    10_000_000_000, 100_000_000_000, 1_000_000_000_000, 1_000_000_000_000_000,
+    1_000_000_000_000_000_000,
+  ];
+  const eligible = presets.filter(
+    (a) => a >= minBet && a <= balance && a <= stageCeiling,
+  );
+  if (eligible.length === 0) return [];
+  const picks = eligible.length <= 4 ? eligible : eligible.slice(-4);
+  return picks.map((amount) => ({ label: formatMoney(amount), amount }));
+}
+
+function formatPersistentWin(totalPayout: number, bet: number): string {
+  if (totalPayout > 0) return `WIN: ${formatMoney(totalPayout)}! 🔥`;
+  return `LOSS: ${formatMoney(bet)}`;
+}
+
 const MONEY_TIERS: { threshold: number; suffix: string }[] = [
   { threshold: 1e33, suffix: 'Dc' },
   { threshold: 1e30, suffix: 'No' },
@@ -832,6 +847,7 @@ function initialSlots(): SlotsState {
     grid: generateSlotGrid(),
     isSpinning: false,
     slotResultMessage: 'Adjust wager and initiate spin sequence.',
+    persistentWinMessage: '',
     columnAnims: null,
     stoppedColumns: SLOT_COLS,
     activeWins: [],
@@ -1112,59 +1128,6 @@ function PaylineOverlay({
   );
 }
 
-function PaylineLegend() {
-  return (
-    <div className="mt-2 px-1">
-      <div className="flex items-center justify-center gap-2 mb-1">
-        <span className="text-[9px] font-bold tracking-[0.2em] text-orange-400/90 uppercase">
-          {PAYLINE_COUNT} Paylines Active
-        </span>
-        <span className="text-[7px] px-1.5 py-0.5 rounded bg-orange-950/80 border border-orange-600/40 text-orange-300/90">
-          Loose Odds
-        </span>
-      </div>
-      <svg
-        viewBox="0 0 50 30"
-        className="w-full max-w-[240px] mx-auto h-9 block"
-        aria-label={`${PAYLINE_COUNT} payline patterns`}
-      >
-        {PAYLINES.map((line, idx) => (
-          <polyline
-            key={`all-${idx}`}
-            points={line
-              .map(([r, c]) => `${((c + 0.5) / 5) * 50},${((r + 0.5) / 3) * 30}`)
-              .join(' ')}
-            className="payline-legend-line"
-            style={{ opacity: 0.22 + (idx % 3) * 0.06 }}
-          />
-        ))}
-      </svg>
-      <p className="text-[7px] text-zinc-600 text-center mt-1">
-        3 rows · 2 diagonals · V · M · W · zigzags
-      </p>
-      <div className="flex flex-wrap justify-center gap-1.5 mt-1.5">
-        {LEGEND_PAYLINES.map((item) => (
-          <div
-            key={item.name}
-            className="flex flex-col items-center gap-0.5 bg-zinc-900/80 rounded px-1 py-0.5 border border-zinc-700/50"
-          >
-            <svg viewBox="0 0 50 30" className="w-9 h-5" aria-hidden>
-              <polyline
-                points={item.coords
-                  .map(([r, c]) => `${((c + 0.5) / 5) * 50},${((r + 0.5) / 3) * 30}`)
-                  .join(' ')}
-                className="payline-legend-line"
-              />
-            </svg>
-            <span className="text-[6px] text-zinc-500">{item.name}</span>
-          </div>
-        ))}
-        <span className="text-[6px] text-zinc-600 self-center">+13 more</span>
-      </div>
-    </div>
-  );
-}
-
 function SlotColumn({
   columnSymbols,
   anim,
@@ -1173,6 +1136,7 @@ function SlotColumn({
   stopped,
   burningCells,
   cascadeFresh,
+  cellHeight,
 }: {
   columnSymbols: [string, string, string];
   anim: ColumnAnim | null;
@@ -1181,10 +1145,11 @@ function SlotColumn({
   stopped: boolean;
   burningCells: Set<string>;
   cascadeFresh: Set<string>;
+  cellHeight: number;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-  const viewportH = SLOT_CELL_H * SLOT_ROWS;
+  const viewportH = cellHeight * SLOT_ROWS;
 
   useEffect(() => {
     if (!anim || !spinning || stopped) {
@@ -1230,9 +1195,14 @@ function SlotColumn({
               <div
                 key={`${columnIndex}-${idx}`}
                 className="flex items-center justify-center select-none"
-                style={{ height: SLOT_CELL_H }}
+                style={{ height: cellHeight }}
               >
-                <span className="text-2xl sm:text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]">{sym}</span>
+                <span
+                  className="drop-shadow-[0_0_8px_rgba(212,175,55,0.25)]"
+                  style={{ fontSize: Math.max(18, Math.min(32, cellHeight * 0.48)) }}
+                >
+                  {sym}
+                </span>
               </div>
             ))}
           </div>
@@ -1248,10 +1218,13 @@ function SlotColumn({
                   className={`flex items-center justify-center select-none relative ${
                     burning ? 'slot-cell-burning animate-inferno-burn' : ''
                   } ${fresh ? 'animate-cascade-drop' : ''}`}
-                  style={{ height: SLOT_CELL_H }}
+                  style={{ height: cellHeight }}
                 >
                   {!burning && (
-                    <span className="text-2xl sm:text-3xl drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
+                    <span
+                      className="drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]"
+                      style={{ fontSize: Math.max(18, Math.min(32, cellHeight * 0.48)) }}
+                    >
                       {sym}
                     </span>
                   )}
@@ -1289,6 +1262,8 @@ function SlotMatrix({
   burningCells: string[];
   cascadeFresh: string[];
 }) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cellHeight, setCellHeight] = useState(SLOT_CELL_H);
   const burnSet = new Set(burningCells);
   const freshSet = new Set(cascadeFresh);
   const hasInfernoWin = activeWins.some((w) => w.count >= INFERNO_MIN_MATCH);
@@ -1296,17 +1271,30 @@ function SlotMatrix({
     [grid[0][col], grid[1][col], grid[2][col]] as [string, string, string],
   );
 
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const measure = () => {
+      const h = el.clientHeight;
+      if (h > 0) setCellHeight(Math.max(44, Math.floor(h / SLOT_ROWS)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className={`relative w-full mx-auto theme-transition ${theme.slotGlow}`}>
-      <div className="absolute -inset-1 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
+    <div className={`relative w-full h-full mx-auto theme-transition ${theme.slotGlow}`}>
+      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-b from-gold/20 via-transparent to-gold-dark/30 blur-sm" />
       <div
-        className={`theme-transition relative rounded-2xl border-2 p-2 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] ${theme.slotFrame} ${theme.slotCabinet}`}
+        className={`theme-transition relative h-full flex flex-col rounded-2xl border-2 p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.08)] ${theme.slotFrame} ${theme.slotCabinet}`}
       >
-        <div className="flex items-center justify-between px-2 mb-1.5">
-          <span className={`text-[10px] font-bold tracking-[0.25em] uppercase ${theme.title}`}>
-            VIP · 3×5 Matrix
+        <div className="flex items-center justify-between px-1 mb-1 shrink-0">
+          <span className={`text-[9px] font-bold tracking-[0.2em] uppercase ${theme.title}`}>
+            VIP · 3×5
           </span>
-          <div className="flex gap-1">
+          <div className="flex gap-0.5">
             {Array.from({ length: SLOT_COLS }, (_, i) => (
               <div
                 key={i}
@@ -1321,8 +1309,11 @@ function SlotMatrix({
             ))}
           </div>
         </div>
-        <div className="relative rounded-xl border border-zinc-700 bg-black p-1.5 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]">
-          <div className="flex gap-1 justify-center w-full relative">
+        <div
+          ref={gridRef}
+          className="relative flex-1 min-h-0 rounded-xl border border-zinc-700 bg-black p-1 shadow-[inset_0_4px_24px_rgba(0,0,0,0.9)]"
+        >
+          <div className="flex gap-1 justify-center w-full h-full relative">
             {columns.map((colSyms, i) => (
               <SlotColumn
                 key={i}
@@ -1333,6 +1324,7 @@ function SlotMatrix({
                 stopped={!spinning || i < stoppedColumns}
                 burningCells={burnSet}
                 cascadeFresh={freshSet}
+                cellHeight={cellHeight}
               />
             ))}
           </div>
@@ -1344,12 +1336,7 @@ function SlotMatrix({
             />
           )}
         </div>
-        <PaylineLegend />
-        <div className="mt-1 flex justify-between px-1">
-          <span className="text-[8px] text-zinc-600 tracking-wider">{PAYLINE_COUNT} PAYLINES</span>
-          <span className="text-[8px] text-zinc-600 tracking-wider">4+ INFERNO CASCADE</span>
-        </div>
-        <div className="mt-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
+        <div className="mt-1 h-0.5 rounded-full bg-zinc-800 overflow-hidden shrink-0">
           <div
             className={`h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light transition-all ease-out ${spinning ? 'w-full' : 'w-0'}`}
             style={{ transitionDuration: spinning ? '3800ms' : '300ms' }}
@@ -1457,6 +1444,7 @@ export default function App() {
         infernoPhase: 'idle',
         burningCells: [],
         cascadeFresh: [],
+        persistentWinMessage: '',
         slotResultMessage: 'New venue unlocked. 3×5 matrix recalibrated.',
       }));
       if (currentBet < STAGES[stageFromPeak].minBet) {
@@ -1580,6 +1568,7 @@ export default function App() {
         cascadeChain: 0,
         pendingBet: 0,
         slotResultMessage: summary,
+        persistentWinMessage: formatPersistentWin(totalPayout, bet),
       }));
     },
     [feedbackWin, feedbackLoss],
@@ -2002,6 +1991,12 @@ export default function App() {
     setCurrentBet((b) => Math.max(minBet, Math.min(playerMoney, b + delta)));
   };
 
+  const setWagerJump = (amount: number) => {
+    setCurrentBet(Math.max(minBet, Math.min(playerMoney, amount)));
+  };
+
+  const wagerJumps = buildWagerJumps(playerMoney, minBet, currentStage);
+
   const spinSlots = () => {
     if (slotsState.isSpinning) return;
     const bet = currentBet;
@@ -2026,6 +2021,7 @@ export default function App() {
       isSpinning: true,
       columnAnims,
       slotResultMessage: 'Matrix engaged — columns locking…',
+      persistentWinMessage: '',
       stoppedColumns: 0,
       activeWins: [],
       infernoPhase: 'idle',
@@ -2076,13 +2072,30 @@ export default function App() {
       infernoPhase: 'idle',
       burningCells: [],
       cascadeFresh: [],
+      persistentWinMessage: '',
     }));
   };
 
   const theme = stage.theme;
   const heatGlow = getHeatGlowClass(passiveIncomeRate);
   const slotsResolving =
-    slotsState.infernoPhase !== 'idle' || slotsState.activeWins.length > 0;
+    slotsState.infernoPhase !== 'idle' ||
+    (slotsState.activeWins.length > 0 && !slotsState.isSpinning);
+
+  const slotsLiveStatus = slotsState.isSpinning
+    ? 'Reels locking…'
+    : slotsState.infernoPhase === 'ignite'
+      ? 'Inferno ignite! 🔥'
+      : slotsState.infernoPhase === 'burn'
+        ? 'Symbols burning…'
+        : slotsState.infernoPhase === 'cascade'
+          ? 'Cascade drop…'
+          : null;
+
+  const slotsWinDisplay =
+    slotsState.isSpinning || slotsResolving
+      ? slotsLiveStatus ?? 'Resolving…'
+      : slotsState.persistentWinMessage || 'Set wager below · tap Spin';
   const dealerTotal = handValue(blackjackState.dealerHand).total;
   const playerTotal = handValue(blackjackState.playerHand).total;
   const canBet = blackjackState.gameStatus === 'betting' && !blackjackBusy;
@@ -2125,38 +2138,48 @@ export default function App() {
               )}
             </GlassPanel>
           </div>
-          <GlassPanel theme={theme} className={`mt-3 px-3 py-2 flex items-center gap-2 ${theme.wagerControl}`}>
-            <span className={`text-[10px] uppercase tracking-wider shrink-0 ${theme.muted}`}>
-              Wager
-            </span>
-            <button
-              type="button"
-              onClick={() => adjustBet(-minBet)}
-              className={`theme-transition w-8 h-8 rounded-lg border btn-premium text-sm font-bold ${theme.wagerControl}`}
-            >
-              −
-            </button>
-            <span className={`flex-1 text-center font-bold tabular-nums text-base ${theme.money}`}>
-              {formatMoney(currentBet)}
-            </span>
-            <button
-              type="button"
-              onClick={() => adjustBet(minBet)}
-              className={`theme-transition w-8 h-8 rounded-lg border btn-premium text-sm font-bold ${theme.wagerControl}`}
-            >
-              +
-            </button>
-            <span className={`text-[9px] shrink-0 ${theme.muted}`}>min {formatMoney(minBet)}</span>
-          </GlassPanel>
+          {currentTab !== 'slots' && (
+            <GlassPanel theme={theme} className={`mt-3 px-3 py-2 flex items-center gap-2 ${theme.wagerControl}`}>
+              <span className={`text-[10px] uppercase tracking-wider shrink-0 ${theme.muted}`}>
+                Wager
+              </span>
+              <button
+                type="button"
+                onClick={() => adjustBet(-minBet)}
+                className={`theme-transition w-8 h-8 rounded-lg border btn-premium text-sm font-bold ${theme.wagerControl}`}
+              >
+                −
+              </button>
+              <span className={`flex-1 text-center font-bold tabular-nums text-base ${theme.money}`}>
+                {formatMoney(currentBet)}
+              </span>
+              <button
+                type="button"
+                onClick={() => adjustBet(minBet)}
+                className={`theme-transition w-8 h-8 rounded-lg border btn-premium text-sm font-bold ${theme.wagerControl}`}
+              >
+                +
+              </button>
+              <span className={`text-[9px] shrink-0 ${theme.muted}`}>min {formatMoney(minBet)}</span>
+            </GlassPanel>
+          )}
         </div>
       </header>
 
-      <main className={`flex-1 min-h-0 px-safe ${currentTab === 'blackjack' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
+      <main
+        className={`flex-1 min-h-0 px-safe ${
+          currentTab === 'blackjack' || currentTab === 'slots'
+            ? 'flex flex-col overflow-hidden'
+            : 'overflow-y-auto overflow-x-hidden'
+        }`}
+      >
         <div
           className={`relative ${
             currentTab === 'blackjack'
               ? 'flex flex-col flex-1 min-h-0 px-2 py-2'
-              : 'px-3 py-3 min-h-full'
+              : currentTab === 'slots'
+                ? 'flex flex-col flex-1 min-h-0 max-h-[85vh] overflow-hidden px-2 py-1'
+                : 'px-3 py-3 min-h-full'
           }`}
         >
           {floatMessages.map((fm) => (
@@ -2238,12 +2261,9 @@ export default function App() {
           {currentTab === 'slots' && (
             <GlassPanel
               theme={theme}
-              className={`p-2 ring-1 ${theme.ring} flex flex-col flex-1 min-h-0`}
+              className={`p-1.5 ring-1 ${theme.ring} flex flex-col flex-1 min-h-0 overflow-hidden`}
             >
-              <p className={`text-center text-[10px] tracking-widest uppercase mb-2 shrink-0 ${theme.muted}`}>
-                VIP · 3×5 Professional
-              </p>
-              <div className="flex-1 flex items-center min-h-0 py-1">
+              <div className="flex-1 min-h-0 flex items-stretch justify-center py-0.5">
                 <SlotMatrix
                   theme={theme}
                   grid={slotsState.grid}
@@ -2256,28 +2276,75 @@ export default function App() {
                   cascadeFresh={slotsState.cascadeFresh}
                 />
               </div>
-              <p className="text-center text-xs text-zinc-400 mt-2 mb-1 min-h-[32px] shrink-0 px-1">
-                {slotsState.slotResultMessage}
-              </p>
-              <p className="text-center text-[10px] text-zinc-600 mb-2 shrink-0">
-                {PAYLINE_COUNT} paylines · weighted 🍒🍀🔔 · 3×2× · 4×5× · 5×25×
-              </p>
-              <GoldButton
-                theme={theme}
-                onClick={spinSlots}
-                disabled={slotsState.isSpinning || slotsResolving || playerMoney < currentBet}
-                className={
-                  currentStage === 3
-                    ? 'shadow-[0_0_30px_rgba(212,175,55,0.4)]'
-                    : ''
-                }
+
+              <p
+                className={`shrink-0 text-center font-bold tabular-nums py-1.5 px-1 min-h-[2.25rem] flex items-center justify-center ${
+                  slotsState.persistentWinMessage && !slotsState.isSpinning && !slotsResolving
+                    ? 'text-base text-fire-win'
+                    : slotsState.isSpinning || slotsResolving
+                      ? `text-xs animate-pulse ${theme.label}`
+                      : 'text-xs text-zinc-500'
+                }`}
               >
-                {slotsState.isSpinning
-                  ? 'SPINNING…'
-                  : slotsResolving
-                    ? 'INFERNO…'
-                    : `Initiate Spin · ${formatMoney(currentBet)}`}
-              </GoldButton>
+                {slotsWinDisplay}
+              </p>
+
+              <div className={`shrink-0 rounded-xl px-2 py-1.5 space-y-1.5 ${theme.actionDock}`}>
+                <GlassPanel theme={theme} className={`px-2 py-1.5 flex items-center gap-1.5 ${theme.wagerControl}`}>
+                  <span className={`text-[9px] uppercase tracking-wider shrink-0 ${theme.muted}`}>Bet</span>
+                  <button
+                    type="button"
+                    onClick={() => adjustBet(-minBet)}
+                    className={`theme-transition w-9 h-9 rounded-lg border btn-premium text-sm font-bold shrink-0 ${theme.wagerControl}`}
+                  >
+                    −
+                  </button>
+                  <span className={`flex-1 text-center font-bold tabular-nums text-sm ${theme.money}`}>
+                    {formatMoney(currentBet)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => adjustBet(minBet)}
+                    className={`theme-transition w-9 h-9 rounded-lg border btn-premium text-sm font-bold shrink-0 ${theme.wagerControl}`}
+                  >
+                    +
+                  </button>
+                </GlassPanel>
+
+                {wagerJumps.length > 0 && (
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {wagerJumps.map((jump) => (
+                      <button
+                        key={jump.amount}
+                        type="button"
+                        onClick={() => setWagerJump(jump.amount)}
+                        disabled={slotsState.isSpinning || slotsResolving}
+                        className={`theme-transition px-2 py-1 rounded-lg border text-[10px] font-bold tabular-nums btn-premium disabled:opacity-40 ${theme.wagerControl} ${
+                          currentBet === jump.amount ? 'ring-1 ring-orange-400/70' : ''
+                        }`}
+                      >
+                        {jump.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <GoldButton
+                  theme={theme}
+                  onClick={spinSlots}
+                  disabled={slotsState.isSpinning || slotsResolving || playerMoney < currentBet}
+                  action
+                  className={
+                    currentStage === 3 ? 'shadow-[0_0_30px_rgba(212,175,55,0.4)]' : ''
+                  }
+                >
+                  {slotsState.isSpinning
+                    ? 'SPINNING…'
+                    : slotsResolving
+                      ? 'INFERNO…'
+                      : `Spin · ${formatMoney(currentBet)}`}
+                </GoldButton>
+              </div>
             </GlassPanel>
           )}
 
