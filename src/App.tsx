@@ -1483,7 +1483,6 @@ export default function App() {
 
   const spinSlots = () => {
     if (slotsState.isSpinning) return;
-    if (slotsState.infernoPhase === 'ignite') return;
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
 

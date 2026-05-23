@@ -1,5 +1,3 @@
-import { MechanicalSymbolIcon } from './slotMechanicalIcons';
-
 export type SlotSymbolId =
   | 'cherry'
   | 'clover'
@@ -25,6 +23,19 @@ export const SLOT_SYMBOLS: SlotSymbolId[] = [
   'jackpot',
 ];
 
+export const SYMBOL_EMOJI: Record<SlotSymbolId, string> = {
+  cherry: '🍒',
+  clover: '🍀',
+  bell: '🔔',
+  cash: '💵',
+  dice: '🎲',
+  ace: '🅰️',
+  star: '⭐',
+  diamond: '💎',
+  crown: '👑',
+  jackpot: '🎰',
+};
+
 export const SLOT_SYMBOL_WEIGHTS: { symbol: SlotSymbolId; weight: number }[] = [
   { symbol: 'cherry', weight: 4 },
   { symbol: 'clover', weight: 4 },
@@ -41,16 +52,16 @@ export const SLOT_SYMBOL_WEIGHTS: { symbol: SlotSymbolId; weight: number }[] = [
 const WEIGHTED_TOTAL = SLOT_SYMBOL_WEIGHTS.reduce((s, e) => s + e.weight, 0);
 
 export const SYMBOL_LABELS: Record<SlotSymbolId, string> = {
-  cherry: 'Spring',
-  clover: 'Cog',
+  cherry: 'Cherry',
+  clover: 'Clover',
   bell: 'Bell',
   cash: 'Cash',
-  dice: 'Bolt',
-  ace: 'Gauge',
-  star: 'Brass Star',
+  dice: 'Dice',
+  ace: 'Ace',
+  star: 'Star',
   diamond: 'Diamond',
   crown: 'Crown',
-  jackpot: 'Crank',
+  jackpot: 'Jackpot',
 };
 
 /** Rewarding payouts — frequent hits should feel worthwhile */
@@ -283,17 +294,22 @@ export function paylinePayoutMultiplier(count: number): number {
 export function SlotSymbolCell({
   symbol,
   inferno = false,
+  spinning = false,
 }: {
   symbol: SlotSymbolId;
   inferno?: boolean;
+  spinning?: boolean;
 }) {
   return (
-    <div
-      className={`w-full h-full flex items-center justify-center bg-transparent ${
-        inferno ? 'ring-1 ring-amber-500/80 ring-inset' : ''
-      }`}
-    >
-      <MechanicalSymbolIcon symbol={symbol} inferno={inferno} />
+    <div className="w-full h-full flex items-center justify-center bg-slate-950">
+      <span
+        className={`block leading-none select-none text-center text-5xl sm:text-6xl ${
+          spinning ? 'opacity-90 blur-[1px] scale-105' : ''
+        } ${inferno ? 'scale-110' : ''}`}
+        aria-hidden
+      >
+        {SYMBOL_EMOJI[symbol]}
+      </span>
     </div>
   );
 }

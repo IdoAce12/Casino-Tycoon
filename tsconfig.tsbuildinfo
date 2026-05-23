@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/slotsymbols.tsx","./src/main.tsx","./src/slotcabinet.ts","./src/slotmechanicalicons.tsx","./src/vite-env.d.ts","./src/slots/slotmatrix.tsx","./src/slots/slotreelcolumn.tsx","./src/slots/slotreel.ts","./src/slots/wagerjumps.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/slotsymbols.tsx","./src/main.tsx","./src/slotcabinet.ts","./src/vite-env.d.ts","./src/slots/slotmatrix.tsx","./src/slots/slotreelcolumn.tsx","./src/slots/slotreel.ts","./src/slots/wagerjumps.ts"],"version":"5.9.3"}

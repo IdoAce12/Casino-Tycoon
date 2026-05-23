@@ -10,7 +10,6 @@ export function SlotReelColumn({
   isSpinning,
   burningCells,
   cellHeight,
-  isLastColumn,
   onColumnLanded,
 }: {
   columnIndex: number;
@@ -19,13 +18,13 @@ export function SlotReelColumn({
   isSpinning: boolean;
   burningCells: Set<string>;
   cellHeight: number;
-  isLastColumn: boolean;
   onColumnLanded: (columnIndex: number) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const landedRef = useRef(false);
   const stripRef = useRef<HTMLDivElement>(null);
+  const spinEpochRef = useRef(0);
 
   const strip = anim?.strip ?? columnSymbols;
   const stripCellH = anim?.cellHeight ?? cellHeight;
@@ -47,10 +46,13 @@ export function SlotReelColumn({
       return;
     }
     landedRef.current = false;
+    spinEpochRef.current += 1;
+    const epoch = spinEpochRef.current;
     setOffset(0);
     setTransitioning(false);
     const startId = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        if (epoch !== spinEpochRef.current) return;
         setTransitioning(true);
         setOffset(anim.targetOffset);
       });
@@ -58,29 +60,34 @@ export function SlotReelColumn({
     return () => cancelAnimationFrame(startId);
   }, [anim, isSpinning]);
 
+  const reportLanded = () => {
+    if (landedRef.current) return;
+    landedRef.current = true;
+    setTransitioning(false);
+    onColumnLanded(columnIndex);
+  };
+
   useEffect(() => {
     const el = stripRef.current;
     if (!el || !activeSpin) return;
 
     const handleEnd = (ev: TransitionEvent) => {
       if (ev.propertyName !== 'transform') return;
-      if (landedRef.current) return;
-      landedRef.current = true;
-      setTransitioning(false);
-      onColumnLanded(columnIndex);
+      reportLanded();
     };
 
     el.addEventListener('transitionend', handleEnd);
-    return () => el.removeEventListener('transitionend', handleEnd);
-  }, [activeSpin, columnIndex, onColumnLanded]);
+    const failsafeMs = Math.round(duration * 1000) + 120;
+    const failsafeId = window.setTimeout(reportLanded, failsafeMs);
+
+    return () => {
+      el.removeEventListener('transitionend', handleEnd);
+      window.clearTimeout(failsafeId);
+    };
+  }, [activeSpin, columnIndex, duration]);
 
   return (
-    <div
-      className={`relative flex-1 min-w-0 overflow-hidden ${
-        isLastColumn ? '' : 'border-r border-amber-700/50'
-      }`}
-      style={{ height: viewportH }}
-    >
+    <div className="relative flex-1 min-w-0 overflow-hidden" style={{ height: viewportH }}>
       <div className="absolute inset-0 overflow-hidden">
         <div
           ref={stripRef}
@@ -104,7 +111,7 @@ export function SlotReelColumn({
 
             return (
               <div key={`${columnIndex}-${idx}`} className="w-full" style={{ height: stripCellH }}>
-                <SlotSymbolCell symbol={sym} inferno={inferno} />
+                <SlotSymbolCell symbol={sym} inferno={inferno} spinning={activeSpin} />
               </div>
             );
           })}

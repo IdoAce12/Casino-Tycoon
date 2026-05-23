@@ -1,4 +1,4 @@
-/** Steampunk industrial cabinet — blueprint obsidian shell */
+/** Classic Vegas cabinet — uniform dark velvet reel window */
 
 export interface SlotCabinetStyle {
   shell: string;
@@ -7,16 +7,16 @@ export interface SlotCabinetStyle {
   badge: string;
 }
 
-const STEAMPUNK: SlotCabinetStyle = {
-  shell: 'bg-[#0a0a0c] border-amber-800/40',
-  gridWindow: 'blueprint-reel-window',
-  progressBar: 'from-amber-700 via-amber-500 to-amber-800',
-  badge: 'text-amber-600/90',
+const CLASSIC_VEGAS: SlotCabinetStyle = {
+  shell: 'bg-zinc-900/90 border-zinc-700/80',
+  gridWindow: 'bg-slate-950',
+  progressBar: 'from-amber-600 via-amber-400 to-amber-600',
+  badge: 'text-amber-500/80',
 };
 
 export const SLOT_CABINET_BY_STAGE: SlotCabinetStyle[] = [
-  STEAMPUNK,
-  STEAMPUNK,
-  STEAMPUNK,
-  STEAMPUNK,
+  CLASSIC_VEGAS,
+  CLASSIC_VEGAS,
+  CLASSIC_VEGAS,
+  CLASSIC_VEGAS,
 ];

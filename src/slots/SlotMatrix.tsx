@@ -88,6 +88,11 @@ export function SlotMatrix({
   const [cellHeight, setCellHeight] = useState(SLOT_CELL_H);
   const burnSet = new Set(burningCells);
   const showPaylines = !isSpinning && activeWins.length > 0;
+  const centerLineWin =
+    showPaylines &&
+    (infernoPhase === 'ignite' ||
+      infernoPhase === 'celebrate' ||
+      activeWins.some((w) => w.coords.some(([r]) => r === 1)));
 
   const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
     [grid[0][col], grid[1][col], grid[2][col]] as [SlotSymbolId, SlotSymbolId, SlotSymbolId],
@@ -111,19 +116,19 @@ export function SlotMatrix({
   }, [onCellHeight]);
 
   return (
-    <div className="relative w-full h-full flex flex-col rounded-lg border border-amber-900/30 bg-[#0a0a0c] p-1 min-h-0">
+    <div className="relative w-full h-full flex flex-col rounded-lg border border-zinc-800 p-1 min-h-0">
       <div
-        className={`flex items-center justify-between px-1.5 py-0.5 shrink-0 border-b border-amber-800/30 ${cabinet.shell}`}
+        className={`flex items-center justify-between px-1 py-0.5 shrink-0 border-b border-zinc-800/80 ${cabinet.shell}`}
       >
-        <span className={`text-[8px] font-bold tracking-[0.2em] uppercase ${cabinet.badge}`}>
-          Blueprint · 3×5
+        <span className={`text-[8px] font-bold tracking-widest uppercase ${cabinet.badge}`}>
+          Vegas · 3×5
         </span>
         <div className="flex gap-1">
           {Array.from({ length: SLOT_COLS }, (_, i) => (
             <div
               key={i}
               className={`w-1.5 h-1.5 rounded-full ${
-                isSpinning && i >= stoppedColumns ? 'bg-amber-400' : isSpinning ? 'bg-amber-600' : 'bg-zinc-700'
+                isSpinning && i >= stoppedColumns ? 'bg-amber-400' : isSpinning ? 'bg-emerald-500' : 'bg-zinc-600'
               }`}
             />
           ))}
@@ -131,7 +136,10 @@ export function SlotMatrix({
       </div>
 
       <div ref={gridRef} className={`relative flex-1 min-h-0 rounded-sm ${cabinet.gridWindow}`}>
-        <div className="blueprint-schematic-lines absolute inset-0 pointer-events-none opacity-40" aria-hidden />
+        <div
+          className={`slots-center-payline ${centerLineWin ? 'slots-center-payline--win' : ''}`}
+          aria-hidden
+        />
         <div className="relative flex h-full w-full z-[1]">
           {columns.map((colSyms, i) => (
             <SlotReelColumn
@@ -142,7 +150,6 @@ export function SlotMatrix({
               isSpinning={isSpinning}
               burningCells={burnSet}
               cellHeight={cellHeight}
-              isLastColumn={i === SLOT_COLS - 1}
               onColumnLanded={onColumnLanded}
             />
           ))}
