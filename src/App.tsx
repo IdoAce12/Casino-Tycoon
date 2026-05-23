@@ -11,14 +11,19 @@ import {
   PAYLINES,
   countPaylineMatch,
   paylinePayoutMultiplier,
-  randomSlotSymbol,
   SLOT_SYMBOLS,
-  SlotSymbolCell,
   SYMBOL_LABELS,
   type SlotGrid,
   type SlotSymbolId,
 } from './SlotSymbols';
-import { SLOT_CABINET_BY_STAGE } from './slotCabinet';
+import {
+  buildColumnStrip,
+  REEL_STOP_DURATIONS,
+  SLOT_COLS,
+  type ColumnAnim,
+} from './slots/slotReel';
+import { SlotMatrix } from './slots/SlotMatrix';
+import { buildWagerJumps } from './slots/wagerJumps';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,14 +49,6 @@ interface BlackjackState {
   dealerHoleHidden: boolean;
 }
 
-interface ColumnAnim {
-  strip: SlotSymbolId[];
-  targetOffset: number;
-  duration: number;
-  cellHeight: number;
-  finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId];
-}
-
 type InfernoPhase = 'idle' | 'ignite' | 'celebrate';
 
 interface SlotWin {
@@ -65,6 +62,7 @@ interface SlotWin {
 interface SlotsState {
   grid: SlotGrid;
   isSpinning: boolean;
+  spinSessionId: number;
   slotResultMessage: string;
   persistentWinMessage: string;
   columnAnims: ColumnAnim[] | null;
@@ -303,9 +301,8 @@ const STAGES: StageConfig[] = [
   },
 ];
 
-const SLOT_ROWS = 3;
-const SLOT_COLS = 5;
-const SLOT_CELL_H = 52;
+const SLOT_CELL_H = 56;
+const REEL_FAILSAFE_MS = 3400;
 
 /** Passive yield per stage — higher venues tax empire cash flow until tables pay off */
 const STAGE_PASSIVE_EFFICIENCY = [1, 0.82, 0.68, 0.55] as const;
@@ -321,8 +318,6 @@ const UPGRADE_BASE = {
 };
 
 const OFFSHORE_PASSIVE_MULT = 2.5;
-const COLUMN_STOP_STAGGER_MS = 420;
-const INFERNO_MIN_MATCH = 4;
 const INFERNO_IGNITE_MS = 700;
 const INFERNO_CELEBRATE_MS = 900;
 const MEGA_WIN_MULT = 10;
@@ -469,26 +464,6 @@ function cardColor(card: Card): string {
   return card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-slate-900';
 }
 
-function buildColumnStrip(
-  finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId],
-  loops: number,
-  cellHeight: number,
-): ColumnAnim {
-  const strip: SlotSymbolId[] = [];
-  for (let loop = 0; loop < loops; loop++) {
-    for (let i = 0; i < SLOT_ROWS; i++) strip.push(randomSlotSymbol());
-  }
-  strip.push(...finals);
-  const landIndex = strip.length - SLOT_ROWS;
-  return {
-    strip,
-    targetOffset: -landIndex * cellHeight,
-    duration: 0,
-    cellHeight,
-    finals,
-  };
-}
-
 function evaluateSlotWinsDetailed(
   grid: SlotGrid,
   bet: number,
@@ -549,28 +524,9 @@ function getHeatGlowClass(passiveRate: number): string {
   return '';
 }
 
-function buildWagerJumps(
-  balance: number,
-  minBet: number,
-  stageIdx: number,
-): { label: string; amount: number }[] {
-  const stageCeiling = [1e6, 1e9, 1e12, 1e18][stageIdx] ?? 1e18;
-  const presets = [
-    1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000,
-    10_000_000_000, 100_000_000_000, 1_000_000_000_000, 1_000_000_000_000_000,
-    1_000_000_000_000_000_000,
-  ];
-  const eligible = presets.filter(
-    (a) => a >= minBet && a <= balance && a <= stageCeiling,
-  );
-  if (eligible.length === 0) return [];
-  const picks = eligible.length <= 4 ? eligible : eligible.slice(-4);
-  return picks.map((amount) => ({ label: formatMoney(amount), amount }));
-}
-
-function formatPersistentWin(totalPayout: number, bet: number): string {
-  if (totalPayout > 0) return `WIN: ${formatMoney(totalPayout)}!`;
-  return `LOSS: ${formatMoney(bet)}`;
+function formatPersistentWin(totalPayout: number, _bet: number): string {
+  if (totalPayout > 0) return `WIN: ${formatMoney(totalPayout)}! 🔥`;
+  return `LOSS: ${formatMoney(_bet)}`;
 }
 
 const MONEY_TIERS: { threshold: number; suffix: string }[] = [
@@ -639,6 +595,7 @@ function initialSlots(): SlotsState {
   return {
     grid: generateSlotGrid(),
     isSpinning: false,
+    spinSessionId: 0,
     slotResultMessage: 'Adjust wager and initiate spin sequence.',
     persistentWinMessage: '',
     columnAnims: null,
@@ -848,291 +805,6 @@ function PlayingCard({
   );
 }
 
-function cellCenterPct(row: number, col: number): { x: number; y: number } {
-  return { x: ((col + 0.5) / SLOT_COLS) * 100, y: ((row + 0.5) / SLOT_ROWS) * 100 };
-}
-
-function PaylineOverlay({
-  wins,
-  infernoPhase,
-  highlightInferno,
-}: {
-  wins: SlotWin[];
-  infernoPhase: InfernoPhase;
-  highlightInferno: boolean;
-}) {
-  if (wins.length === 0) return null;
-  const infernoActive = highlightInferno && infernoPhase !== 'idle';
-
-  return (
-    <svg
-      className="absolute inset-0 w-full h-full pointer-events-none z-30"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="infernoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#ff2200" />
-          <stop offset="45%" stopColor="#ff9500" />
-          <stop offset="100%" stopColor="#ffcc00" />
-        </linearGradient>
-        <filter id="infernoGlow">
-          <feGaussianBlur stdDeviation="1.2" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      {wins.map((win) => {
-        const pts = win.coords.map(([r, c]) => {
-          const { x, y } = cellCenterPct(r, c);
-          return `${x},${y}`;
-        });
-        const isInfernoLine = win.count >= INFERNO_MIN_MATCH;
-        const dense = wins.length > 6;
-        return (
-          <polyline
-            key={`line-${win.lineIndex}-${win.count}`}
-            points={pts.join(' ')}
-            fill="none"
-            stroke="url(#infernoGrad)"
-            strokeWidth={
-              dense ? 1.6 : infernoActive && isInfernoLine ? 3.2 : 2.2
-            }
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            filter="url(#infernoGlow)"
-            className={
-              infernoActive && isInfernoLine
-                ? 'animate-inferno-line'
-                : infernoPhase === 'ignite'
-                  ? 'animate-inferno-line opacity-90'
-                  : 'opacity-80'
-            }
-            style={{ vectorEffect: 'non-scaling-stroke' } as React.CSSProperties}
-          />
-        );
-      })}
-    </svg>
-  );
-}
-
-function SlotColumn({
-  columnSymbols,
-  anim,
-  spinning,
-  columnIndex,
-  burningCells,
-  cellHeight,
-  reelCell,
-}: {
-  columnSymbols: [SlotSymbolId, SlotSymbolId, SlotSymbolId];
-  anim: ColumnAnim | null;
-  spinning: boolean;
-  columnIndex: number;
-  burningCells: Set<string>;
-  cellHeight: number;
-  reelCell: string;
-}) {
-  const [offset, setOffset] = useState(0);
-  const [transitioning, setTransitioning] = useState(false);
-  const stripCellH = anim?.cellHeight ?? cellHeight;
-  const viewportH = stripCellH * SLOT_ROWS;
-  const showReelStrip = Boolean(anim && spinning);
-  const displaySymbols = showReelStrip ? anim!.finals : columnSymbols;
-
-  useEffect(() => {
-    if (!anim || !spinning) {
-      setOffset(0);
-      setTransitioning(false);
-      return;
-    }
-    setOffset(0);
-    setTransitioning(false);
-    const startId = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTransitioning(true);
-        setOffset(anim.targetOffset);
-      });
-    });
-    return () => cancelAnimationFrame(startId);
-  }, [anim, spinning]);
-
-  const duration = anim?.duration ?? 2.2;
-
-  return (
-    <div
-      className={`relative flex-1 min-w-0 rounded-sm overflow-hidden border ${reelCell}`}
-      style={{ height: viewportH }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] via-transparent to-black/25 pointer-events-none z-[1]" />
-      <div className="absolute inset-x-0 top-0 h-1/5 bg-gradient-to-b from-white/[0.06] to-transparent z-[1] pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-1/5 bg-gradient-to-t from-black/40 to-transparent z-[1] pointer-events-none" />
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-gold/25 z-[1] pointer-events-none" />
-      <div className="absolute inset-0 overflow-hidden z-[5]">
-        {showReelStrip ? (
-          <div
-            className="reel-strip"
-            style={{
-              transform: `translate3d(0, ${offset}px, 0)`,
-              transition: transitioning
-                ? `transform ${duration}s cubic-bezier(0.12, 0.72, 0.2, 1)`
-                : 'none',
-            }}
-          >
-            {anim!.strip.map((sym, idx) => (
-              <div
-                key={`${columnIndex}-${idx}`}
-                className="w-full select-none leading-none p-0"
-                style={{ height: stripCellH }}
-              >
-                <SlotSymbolCell symbol={sym} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-px leading-none h-full">
-            {displaySymbols.map((sym, row) => {
-              const cellKey = `${row},${columnIndex}`;
-              const inferno = burningCells.has(cellKey);
-              return (
-                <div
-                  key={`${columnIndex}-${row}`}
-                  className="w-full flex-1 min-h-0 select-none relative p-0"
-                  style={{ minHeight: cellHeight }}
-                >
-                  <SlotSymbolCell symbol={sym} inferno={inferno} />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SlotMatrix({
-  theme,
-  stageIndex,
-  grid,
-  spinning,
-  columnAnims,
-  stoppedColumns,
-  activeWins,
-  infernoPhase,
-  burningCells,
-  onCellHeight,
-}: {
-  theme: StageTheme;
-  stageIndex: number;
-  grid: SlotGrid;
-  spinning: boolean;
-  columnAnims: ColumnAnim[] | null;
-  stoppedColumns: number;
-  activeWins: SlotWin[];
-  infernoPhase: InfernoPhase;
-  burningCells: string[];
-  onCellHeight: (height: number) => void;
-}) {
-  const cabinet = SLOT_CABINET_BY_STAGE[Math.min(stageIndex, SLOT_CABINET_BY_STAGE.length - 1)];
-  const gridRef = useRef<HTMLDivElement>(null);
-  const [cellHeight, setCellHeight] = useState(SLOT_CELL_H);
-  const burnSet = new Set(burningCells);
-  const hasInfernoWin = activeWins.some((w) => w.count >= INFERNO_MIN_MATCH);
-  const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
-    [grid[0][col], grid[1][col], grid[2][col]] as [SlotSymbolId, SlotSymbolId, SlotSymbolId],
-  );
-
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    const measure = () => {
-      const h = el.clientHeight;
-      if (h > 0) {
-        const next = Math.max(44, Math.floor(h / SLOT_ROWS));
-        setCellHeight(next);
-        onCellHeight(next);
-      }
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [onCellHeight]);
-
-  return (
-    <div className={`relative w-full h-full mx-auto theme-transition ${theme.slotGlow}`}>
-      <div
-        className={`absolute -inset-1 rounded-2xl bg-gradient-to-b opacity-80 blur-md pointer-events-none ${cabinet.outerAura}`}
-      />
-      <div
-        className={`theme-transition relative h-full flex flex-col rounded-xl border-2 p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.1)] ${theme.slotFrame} ${cabinet.shell}`}
-      >
-        {cabinet.decorClass && (
-          <div
-            className={`absolute inset-0 rounded-xl pointer-events-none z-0 overflow-hidden ${cabinet.decorClass}`}
-            aria-hidden
-          />
-        )}
-        <div className="flex items-center justify-between px-1 mb-1 shrink-0 relative z-[2]">
-          <span className={`text-[9px] font-bold tracking-[0.2em] uppercase ${cabinet.badge}`}>
-            VIP · 3×5
-          </span>
-          <div className="flex gap-0.5">
-            {Array.from({ length: SLOT_COLS }, (_, i) => (
-              <div
-                key={i}
-                className={`w-1.5 h-1.5 rounded-full theme-transition ${
-                  spinning && i >= stoppedColumns
-                    ? 'bg-white animate-pulse opacity-100'
-                    : spinning
-                      ? 'bg-emerald-400/80'
-                      : 'bg-white/30'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-        <div
-          ref={gridRef}
-          className={`relative flex-1 min-h-0 rounded-lg border p-0 z-[1] ${cabinet.gridWindow}`}
-        >
-          <div className="flex gap-px justify-center w-full h-full relative">
-            {columns.map((colSyms, i) => (
-              <SlotColumn
-                key={i}
-                columnIndex={i}
-                columnSymbols={colSyms}
-                anim={columnAnims?.[i] ?? null}
-                spinning={spinning && columnAnims !== null}
-                burningCells={burnSet}
-                cellHeight={cellHeight}
-                reelCell={cabinet.reelCell}
-              />
-            ))}
-          </div>
-          {!spinning && activeWins.length > 0 && (
-            <PaylineOverlay
-              wins={activeWins}
-              infernoPhase={infernoPhase}
-              highlightInferno={hasInfernoWin}
-            />
-          )}
-        </div>
-        <div className="mt-1 h-0.5 rounded-full bg-zinc-800/80 overflow-hidden shrink-0 relative z-[2]">
-          <div
-            className={`h-full bg-gradient-to-r transition-all ease-out ${cabinet.progressBar} ${spinning ? 'w-full' : 'w-0'}`}
-            style={{ transitionDuration: spinning ? '3800ms' : '300ms' }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1162,9 +834,16 @@ export default function App() {
 
   const floatId = useRef(0);
   const slotSpinSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const slotSpinEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slotReelFailsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slotCascadeTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const slotsCellHeightRef = useRef(SLOT_CELL_H);
+  const slotsSpinSessionRef = useRef(0);
+  const pendingSpinRef = useRef<{
+    grid: SlotGrid;
+    bet: number;
+    sessionId: number;
+  } | null>(null);
+  const reelResolveStartedRef = useRef(false);
   const dealerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerFailsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dealerSeqRef = useRef(0);
@@ -1259,7 +938,7 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
-      if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
+      if (slotReelFailsafeRef.current) clearTimeout(slotReelFailsafeRef.current);
       clearSlotCascadeTimers();
       if (dealerTimeoutRef.current) clearTimeout(dealerTimeoutRef.current);
       if (dealerFailsafeRef.current) clearTimeout(dealerFailsafeRef.current);
@@ -1358,8 +1037,9 @@ export default function App() {
         ...s,
         grid: finalGrid,
         isSpinning: false,
-        columnAnims: null,
         stoppedColumns: SLOT_COLS,
+        columnAnims:
+          s.columnAnims?.map((a) => ({ ...a, landed: true })) ?? s.columnAnims,
         activeWins: wins,
         infernoPhase: totalPayout > 0 ? 'celebrate' : 'idle',
         burningCells: celebrateCells,
@@ -1367,6 +1047,8 @@ export default function App() {
         slotResultMessage: summary,
         persistentWinMessage: formatPersistentWin(totalPayout, bet),
       }));
+      reelResolveStartedRef.current = false;
+      pendingSpinRef.current = null;
     },
     [feedbackWin, feedbackLoss],
   );
@@ -1394,6 +1076,71 @@ export default function App() {
     },
     [finalizeSlotsRound, scheduleSlotCascade],
   );
+
+  const completeReelsSpin = useCallback(() => {
+    if (reelResolveStartedRef.current) return;
+    const pending = pendingSpinRef.current;
+    if (!pending || pending.sessionId !== slotsSpinSessionRef.current) return;
+
+    reelResolveStartedRef.current = true;
+    if (slotSpinSoundRef.current) {
+      clearInterval(slotSpinSoundRef.current);
+      slotSpinSoundRef.current = null;
+    }
+    if (slotReelFailsafeRef.current) {
+      clearTimeout(slotReelFailsafeRef.current);
+      slotReelFailsafeRef.current = null;
+    }
+
+    setSlotsState((s) => ({
+      ...s,
+      isSpinning: false,
+      stoppedColumns: SLOT_COLS,
+      columnAnims: s.columnAnims?.map((a) => ({ ...a, landed: true })) ?? null,
+    }));
+
+    resolveSlotsOutcome(pending.grid, pending.bet);
+  }, [resolveSlotsOutcome]);
+
+  const handleColumnLanded = useCallback((colIndex: number) => {
+    const pending = pendingSpinRef.current;
+    if (!pending || pending.sessionId !== slotsSpinSessionRef.current) return;
+
+    setSlotsState((s) => {
+      if (!s.isSpinning || s.spinSessionId !== pending.sessionId || !s.columnAnims) {
+        return s;
+      }
+      const anims = s.columnAnims.map((a, i) =>
+        i === colIndex ? { ...a, landed: true } : a,
+      );
+      const stopped = anims.filter((a) => a.landed).length;
+      return { ...s, columnAnims: anims, stoppedColumns: stopped };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!slotsState.isSpinning || !slotsState.columnAnims) return;
+    if (!slotsState.columnAnims.every((a) => a.landed)) return;
+    completeReelsSpin();
+  }, [slotsState.isSpinning, slotsState.columnAnims, slotsState.spinSessionId, completeReelsSpin]);
+
+  useEffect(() => {
+    if (!slotsState.isSpinning) return;
+    const sessionId = slotsState.spinSessionId;
+    slotReelFailsafeRef.current = setTimeout(() => {
+      setSlotsState((s) => {
+        if (!s.isSpinning || s.spinSessionId !== sessionId || !s.columnAnims) return s;
+        return {
+          ...s,
+          columnAnims: s.columnAnims.map((a) => ({ ...a, landed: true })),
+          stoppedColumns: SLOT_COLS,
+        };
+      });
+    }, REEL_FAILSAFE_MS);
+    return () => {
+      if (slotReelFailsafeRef.current) clearTimeout(slotReelFailsafeRef.current);
+    };
+  }, [slotsState.isSpinning, slotsState.spinSessionId]);
 
   const upgradeCost = (key: UpgradeKey): number => {
     const base = UPGRADE_BASE[key].cost;
@@ -1732,33 +1479,41 @@ export default function App() {
     setCurrentBet(Math.max(minBet, Math.min(playerMoney, amount)));
   };
 
-  const wagerJumps = buildWagerJumps(playerMoney, minBet, currentStage);
+  const wagerJumps = buildWagerJumps(playerMoney, minBet, currentStage, formatMoney);
 
   const spinSlots = () => {
     if (slotsState.isSpinning) return;
+    if (slotsState.infernoPhase === 'ignite') return;
     const bet = currentBet;
     if (bet < minBet || playerMoney < bet) return;
 
     const finalGrid = generateSlotGrid();
     const cellH = slotsCellHeightRef.current;
-    const baseDurations = [1.6, 1.9, 2.2, 2.5, 2.8] as const;
+    const sessionId = ++slotsSpinSessionRef.current;
+    reelResolveStartedRef.current = false;
+    pendingSpinRef.current = { grid: finalGrid, bet, sessionId };
+
     const columnAnims: ColumnAnim[] = Array.from({ length: SLOT_COLS }, (_, col) => {
       const finals = [finalGrid[0][col], finalGrid[1][col], finalGrid[2][col]] as [
         SlotSymbolId,
         SlotSymbolId,
         SlotSymbolId,
       ];
-      const base = buildColumnStrip(finals, 6 + col * 2, cellH);
-      return { ...base, duration: baseDurations[col] };
+      const base = buildColumnStrip(finals, 8 + col * 2, cellH);
+      return { ...base, duration: REEL_STOP_DURATIONS[col], landed: false };
     });
 
     clearSlotCascadeTimers();
+    if (slotReelFailsafeRef.current) clearTimeout(slotReelFailsafeRef.current);
+    if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
+
     setPlayerMoney((m) => m - bet);
     setSlotsState({
       grid: finalGrid,
       isSpinning: true,
+      spinSessionId: sessionId,
       columnAnims,
-      slotResultMessage: 'Matrix engaged — columns locking…',
+      slotResultMessage: 'High-limit reels engaged…',
       persistentWinMessage: '',
       stoppedColumns: 0,
       activeWins: [],
@@ -1767,31 +1522,7 @@ export default function App() {
       pendingBet: bet,
     });
 
-    slotSpinSoundRef.current = setInterval(() => playSlotClick(), 120);
-
-    if (slotSpinEndRef.current) clearTimeout(slotSpinEndRef.current);
-
-    const finishSpin = () => {
-      if (slotSpinSoundRef.current) clearInterval(slotSpinSoundRef.current);
-      setSlotsState((s) => ({
-        ...s,
-        isSpinning: false,
-        columnAnims: null,
-        stoppedColumns: SLOT_COLS,
-      }));
-      resolveSlotsOutcome(finalGrid, bet);
-    };
-
-    const maxMs = Math.max(...baseDurations) * 1000 + 200;
-    slotSpinEndRef.current = setTimeout(finishSpin, maxMs);
-
-    for (let col = 1; col <= SLOT_COLS; col++) {
-      setTimeout(() => {
-        setSlotsState((s) =>
-          s.isSpinning ? { ...s, stoppedColumns: col } : s,
-        );
-      }, col * COLUMN_STOP_STAGGER_MS + 400);
-    }
+    slotSpinSoundRef.current = setInterval(() => playSlotClick(), 110);
   };
 
   const selectStage = (idx: number) => {
@@ -1994,25 +1725,26 @@ export default function App() {
           {currentTab === 'slots' && (
             <GlassPanel
               theme={theme}
-              className={`p-1.5 ring-1 ${theme.ring} flex flex-col flex-1 min-h-0 overflow-hidden`}
+              className={`p-1 ring-1 ${theme.ring} flex flex-col flex-1 min-h-0 overflow-hidden`}
             >
-              <div className="flex-1 min-h-0 flex items-stretch justify-center py-0.5">
+              <div className="flex-1 min-h-0 flex items-stretch justify-center">
                 <SlotMatrix
                   theme={theme}
                   stageIndex={currentStage}
                   grid={slotsState.grid}
-                  spinning={slotsState.isSpinning}
+                  isSpinning={slotsState.isSpinning}
                   columnAnims={slotsState.columnAnims}
                   stoppedColumns={slotsState.stoppedColumns}
                   activeWins={slotsState.activeWins}
                   infernoPhase={slotsState.infernoPhase}
                   burningCells={slotsState.burningCells}
                   onCellHeight={handleSlotsCellHeight}
+                  onColumnLanded={handleColumnLanded}
                 />
               </div>
 
               <p
-                className={`shrink-0 text-center font-bold tabular-nums py-1.5 px-1 min-h-[2.25rem] flex items-center justify-center ${
+                className={`shrink-0 text-center font-black tabular-nums py-1 px-1 min-h-[2rem] flex items-center justify-center tracking-wide ${
                   slotsState.persistentWinMessage && !slotsState.isSpinning && !slotsResolving
                     ? 'text-base text-fire-win'
                     : slotsState.isSpinning || slotsResolving

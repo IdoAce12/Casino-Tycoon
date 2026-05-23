@@ -62,8 +62,8 @@ export const PAYLINE_PAYOUT_MULT: Record<2 | 3 | 4 | 5, number> = {
   5: 12,
 };
 
-const LUCKY_SPIN_CHANCE = 0.07;
-const NEAR_MISS_CHANCE = 0.38;
+const LUCKY_SPIN_CHANCE = 0.09;
+const NEAR_MISS_CHANCE = 0.34;
 
 export type SlotGrid = [SlotSymbolId, SlotSymbolId, SlotSymbolId, SlotSymbolId, SlotSymbolId][];
 
@@ -637,13 +637,13 @@ export function SlotSymbolIcon({
 }) {
   const Render = RENDERERS[symbol];
   const depth = inferno
-    ? 'brightness-[1.4] contrast-[1.25] saturate-[1.5] drop-shadow-[0_0_16px_rgba(255,100,0,0.9)]'
-    : 'drop-shadow-[0_5px_8px_rgba(0,0,0,0.75)] drop-shadow-[0_0_12px_rgba(255,255,255,0.06)]';
+    ? 'prestige-symbol-inferno brightness-[1.45] contrast-[1.3] saturate-[1.55]'
+    : 'prestige-symbol-lit';
 
   if (fill) {
     return (
       <div
-        className={`symbol-3d-wrap w-full h-full min-w-0 min-h-0 flex items-center justify-center p-0 transition-all duration-300 ${depth}`}
+        className={`symbol-3d-wrap w-[98%] h-[98%] min-w-0 min-h-0 flex items-center justify-center p-0 transition-all duration-300 ${depth}`}
       >
         <div className="w-full h-full flex items-center justify-center [&_svg]:w-full [&_svg]:h-full [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:object-contain">
           <Render size={48} inferno={inferno} />
@@ -673,13 +673,15 @@ export function SlotSymbolCell({
 }) {
   return (
     <div
-      className={`relative w-full h-full min-w-0 min-h-0 overflow-hidden ${SYMBOL_CELL_CLASS[symbol]} ${
+      className={`prestige-symbol-cell relative w-full h-full min-w-0 min-h-0 overflow-hidden ${SYMBOL_CELL_CLASS[symbol]} ${
         inferno ? 'slot-cell-inferno z-[8]' : 'z-[2]'
       }`}
     >
       <div className="slot-cell-vegas-shine pointer-events-none" aria-hidden />
+      <div className="slot-cell-depth-rim pointer-events-none" aria-hidden />
+      {inferno && <div className="inferno-flame-layer pointer-events-none" aria-hidden />}
       <div
-        className={`relative z-[3] w-full h-full flex items-center justify-center p-0 ${
+        className={`prestige-symbol-stage relative z-[4] w-full h-full flex items-center justify-center p-0 ${
           inferno ? 'animate-inferno-celebrate' : ''
         }`}
       >
