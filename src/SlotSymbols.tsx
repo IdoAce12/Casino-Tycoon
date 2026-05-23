@@ -23,18 +23,29 @@ export const SLOT_SYMBOLS: SlotSymbolId[] = [
   'jackpot',
 ];
 
-export const SYMBOL_EMOJI: Record<SlotSymbolId, string> = {
-  cherry: '🍒',
-  clover: '🍀',
-  bell: '🔔',
-  cash: '💵',
-  dice: '🎲',
-  ace: '🦩',
-  star: '⭐',
-  diamond: '💎',
-  crown: '👑',
-  jackpot: '🎰',
+/** Icons8 3D Fluency — premium CDN assets (512px, downscaled in UI) */
+export const SYMBOL_IMAGE_URL: Record<SlotSymbolId, string> = {
+  cherry: 'https://img.icons8.com/fluency/512/cherries.png',
+  clover: 'https://img.icons8.com/fluency/512/four-leaf-clover.png',
+  bell: 'https://img.icons8.com/fluency/512/bell.png',
+  cash: 'https://img.icons8.com/fluency/512/money-bag.png',
+  dice: 'https://img.icons8.com/fluency/512/dice.png',
+  ace: 'https://img.icons8.com/fluency/512/ace-of-spades.png',
+  star: 'https://img.icons8.com/fluency/512/star.png',
+  diamond: 'https://img.icons8.com/fluency/512/diamond.png',
+  crown: 'https://img.icons8.com/fluency/512/crown.png',
+  jackpot: 'https://img.icons8.com/fluency/512/slot-machine.png',
 };
+
+export const SLOT_SYMBOL_IMAGE_URLS = Object.values(SYMBOL_IMAGE_URL);
+
+export function preloadSlotSymbolImages(): void {
+  for (const url of SLOT_SYMBOL_IMAGE_URLS) {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+  }
+}
 
 export const SLOT_SYMBOL_WEIGHTS: { symbol: SlotSymbolId; weight: number }[] = [
   { symbol: 'cherry', weight: 4 },
@@ -298,16 +309,21 @@ export function SlotSymbolCell({
   symbol: SlotSymbolId;
   inferno?: boolean;
 }) {
+  const label = SYMBOL_LABELS[symbol];
   return (
-    <div className="w-full h-full flex items-center justify-center p-0 m-0 bg-transparent">
-      <span
-        className={`block leading-none select-none text-[clamp(2.25rem,13vw,4rem)] ${
-          inferno ? 'scale-110' : ''
+    <div className="w-full h-full flex items-center justify-center bg-transparent">
+      <img
+        src={SYMBOL_IMAGE_URL[symbol]}
+        alt={label}
+        width={512}
+        height={512}
+        draggable={false}
+        loading="eager"
+        decoding="async"
+        className={`w-full h-full object-contain p-1 select-none pointer-events-none drop-shadow-[0_8px_14px_rgba(0,0,0,0.75)] ${
+          inferno ? 'scale-110 brightness-110 drop-shadow-[0_0_18px_rgba(255,140,0,0.55)]' : ''
         }`}
-        aria-hidden
-      >
-        {SYMBOL_EMOJI[symbol]}
-      </span>
+      />
     </div>
   );
 }
