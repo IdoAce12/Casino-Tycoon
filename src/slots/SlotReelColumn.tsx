@@ -30,9 +30,8 @@ export function SlotReelColumn({
   const strip = anim?.strip ?? columnSymbols;
   const stripCellH = anim?.cellHeight ?? cellHeight;
   const viewportH = stripCellH * 3;
-  const duration = anim?.duration ?? 2.2;
+  const duration = anim?.duration ?? 1.4;
   const activeSpin = isSpinning && anim !== null && !anim.landed;
-  const showMotionBlur = activeSpin && transitioning;
   const displayOffset =
     anim && (anim.landed || (!activeSpin && anim.targetOffset !== 0))
       ? anim.targetOffset
@@ -48,7 +47,6 @@ export function SlotReelColumn({
       return;
     }
     landedRef.current = false;
-
     setOffset(0);
     setTransitioning(false);
     const startId = requestAnimationFrame(() => {
@@ -78,14 +76,13 @@ export function SlotReelColumn({
 
   return (
     <div
-      className={`prestige-reel-column relative flex-1 min-w-0 overflow-hidden border ${reelCell}`}
+      className={`relative flex-1 min-w-0 overflow-hidden border ${reelCell}`}
       style={{ height: viewportH }}
     >
-      <div className="prestige-reel-glass absolute inset-0 pointer-events-none z-[2]" aria-hidden />
-      <div className="absolute inset-0 overflow-hidden z-[5]">
+      <div className="absolute inset-0 overflow-hidden">
         <div
           ref={stripRef}
-          className={`reel-strip will-change-transform ${showMotionBlur ? 'reel-motion-blur' : ''}`}
+          className="reel-strip will-change-transform"
           style={{
             transform: `translate3d(0, ${displayOffset}px, 0)`,
             transition: transitioning
@@ -105,8 +102,8 @@ export function SlotReelColumn({
 
             return (
               <div
-                key={`${columnIndex}-${idx}-${sym}`}
-                className="w-full select-none leading-none p-0"
+                key={`${columnIndex}-${idx}`}
+                className="w-full p-0"
                 style={{ height: stripCellH }}
               >
                 <SlotSymbolCell symbol={sym} inferno={inferno} />
@@ -115,8 +112,6 @@ export function SlotReelColumn({
           })}
         </div>
       </div>
-      <div className="prestige-reel-highlight absolute inset-x-0 top-0 h-[18%] bg-gradient-to-b from-white/[0.14] to-transparent pointer-events-none z-[6]" />
-      <div className="prestige-reel-shadow absolute inset-x-0 bottom-0 h-[22%] bg-gradient-to-t from-black/55 to-transparent pointer-events-none z-[6]" />
     </div>
   );
 }

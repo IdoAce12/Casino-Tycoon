@@ -302,7 +302,7 @@ const STAGES: StageConfig[] = [
 ];
 
 const SLOT_CELL_H = 56;
-const REEL_FAILSAFE_MS = 3400;
+const REEL_FAILSAFE_MS = 2000;
 
 /** Passive yield per stage — higher venues tax empire cash flow until tables pay off */
 const STAGE_PASSIVE_EFFICIENCY = [1, 0.82, 0.68, 0.55] as const;
@@ -1499,7 +1499,7 @@ export default function App() {
         SlotSymbolId,
         SlotSymbolId,
       ];
-      const base = buildColumnStrip(finals, 8 + col * 2, cellH);
+      const base = buildColumnStrip(finals, 4 + col, cellH);
       return { ...base, duration: REEL_STOP_DURATIONS[col], landed: false };
     });
 

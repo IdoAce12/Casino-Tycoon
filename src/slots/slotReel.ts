@@ -12,8 +12,8 @@ export interface ColumnAnim {
   landed: boolean;
 }
 
-export const REEL_STOP_DURATIONS = [1.75, 2.0, 2.25, 2.55, 2.85] as const;
-export const REEL_EASING = 'cubic-bezier(0.14, 0.82, 0.18, 1)';
+export const REEL_STOP_DURATIONS = [0.95, 1.1, 1.25, 1.4, 1.55] as const;
+export const REEL_EASING = 'cubic-bezier(0.2, 0.9, 0.25, 1)';
 
 export function buildColumnStrip(
   finals: [SlotSymbolId, SlotSymbolId, SlotSymbolId],

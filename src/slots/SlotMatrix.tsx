@@ -46,44 +46,22 @@ function PaylineOverlay({
       preserveAspectRatio="none"
       aria-hidden
     >
-      <defs>
-        <linearGradient id="infernoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#ff2200" />
-          <stop offset="45%" stopColor="#ff9500" />
-          <stop offset="100%" stopColor="#ffcc00" />
-        </linearGradient>
-        <filter id="infernoGlow">
-          <feGaussianBlur stdDeviation="1.4" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
       {wins.map((win) => {
         const pts = win.coords.map(([r, c]) => {
           const { x, y } = cellCenterPct(r, c);
           return `${x},${y}`;
         });
         const isInfernoLine = win.count >= INFERNO_MIN_MATCH;
-        const dense = wins.length > 6;
         return (
           <polyline
             key={`line-${win.lineIndex}-${win.count}`}
             points={pts.join(' ')}
             fill="none"
-            stroke="url(#infernoGrad)"
-            strokeWidth={dense ? 1.8 : infernoActive && isInfernoLine ? 3.4 : 2.4}
+            stroke={infernoActive && isInfernoLine ? '#ff9500' : '#fbbf24'}
+            strokeWidth={isInfernoLine ? 2.8 : 2}
             strokeLinecap="round"
             strokeLinejoin="round"
-            filter="url(#infernoGlow)"
-            className={
-              infernoActive && isInfernoLine
-                ? 'animate-inferno-line'
-                : infernoPhase === 'ignite'
-                  ? 'animate-inferno-line opacity-90'
-                  : 'opacity-85'
-            }
+            opacity={infernoPhase === 'idle' ? 0.75 : 1}
             style={{ vectorEffect: 'non-scaling-stroke' } as React.CSSProperties}
           />
         );
@@ -146,33 +124,24 @@ export function SlotMatrix({
   }, [onCellHeight]);
 
   return (
-    <div className={`prestige-cabinet relative w-full h-full mx-auto theme-transition ${theme.slotGlow}`}>
+    <div className={`relative w-full h-full mx-auto ${theme.slotGlow}`}>
       <div
-        className={`absolute -inset-1 rounded-2xl bg-gradient-to-b opacity-90 blur-md pointer-events-none ${cabinet.outerAura}`}
-      />
-      <div
-        className={`prestige-cabinet-shell theme-transition relative h-full flex flex-col rounded-xl border-2 p-1 shadow-[0_12px_40px_rgba(0,0,0,0.92),inset_0_2px_0_rgba(255,255,255,0.12)] ${theme.slotFrame} ${cabinet.shell}`}
+        className={`relative h-full flex flex-col rounded-lg border-2 p-0.5 ${theme.slotFrame} ${cabinet.shell}`}
       >
-        {cabinet.decorClass && (
-          <div
-            className={`absolute inset-0 rounded-xl pointer-events-none z-0 overflow-hidden ${cabinet.decorClass}`}
-            aria-hidden
-          />
-        )}
-        <div className="flex items-center justify-between px-1.5 py-0.5 shrink-0 relative z-[2]">
-          <span className={`text-[8px] font-black tracking-[0.28em] uppercase ${cabinet.badge}`}>
-            High Limit · 3×5
+        <div className="flex items-center justify-between px-1 py-0.5 shrink-0">
+          <span className={`text-[8px] font-bold tracking-widest uppercase ${cabinet.badge}`}>
+            3×5
           </span>
           <div className="flex gap-0.5">
             {Array.from({ length: SLOT_COLS }, (_, i) => (
               <div
                 key={i}
-                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                className={`w-1.5 h-1.5 rounded-full ${
                   isSpinning && i >= stoppedColumns
-                    ? 'bg-amber-200 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.9)]'
+                    ? 'bg-amber-300'
                     : isSpinning
-                      ? 'bg-emerald-400/90 shadow-[0_0_4px_rgba(52,211,153,0.7)]'
-                      : 'bg-white/25'
+                      ? 'bg-emerald-400'
+                      : 'bg-white/30'
                 }`}
               />
             ))}
@@ -180,10 +149,9 @@ export function SlotMatrix({
         </div>
         <div
           ref={gridRef}
-          className={`prestige-reel-window relative flex-1 min-h-0 rounded-md border p-0 z-[1] ${cabinet.gridWindow}`}
+          className={`relative flex-1 min-h-0 rounded border border-black/50 p-0 ${cabinet.gridWindow}`}
         >
-          <div className="prestige-scanlines absolute inset-0 pointer-events-none z-[25] opacity-[0.07]" aria-hidden />
-          <div className="flex gap-px justify-center w-full h-full relative z-[10]">
+          <div className="flex gap-px justify-center w-full h-full">
             {columns.map((colSyms, i) => (
               <SlotReelColumn
                 key={i}
@@ -206,10 +174,10 @@ export function SlotMatrix({
             />
           )}
         </div>
-        <div className="mt-0.5 h-0.5 rounded-full bg-black/50 overflow-hidden shrink-0 relative z-[2]">
+        <div className="mt-0.5 h-0.5 rounded-full bg-black/60 overflow-hidden shrink-0">
           <div
-            className={`h-full bg-gradient-to-r transition-all ${cabinet.progressBar} ${isSpinning ? 'w-full ease-out' : 'w-0'}`}
-            style={{ transitionDuration: isSpinning ? '3200ms' : '280ms' }}
+            className={`h-full bg-gradient-to-r ${cabinet.progressBar} transition-[width] ease-out ${isSpinning ? 'w-full' : 'w-0'}`}
+            style={{ transitionDuration: isSpinning ? '1600ms' : '200ms' }}
           />
         </div>
       </div>

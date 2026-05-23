@@ -1,15 +1,15 @@
 import type { SlotSymbolId } from './SlotSymbols';
 
-/** Vegas Spectrum — always-on cell backgrounds per symbol type */
+/** Lightweight Tailwind tile backgrounds — GPU-friendly gradients only */
 export const SYMBOL_CELL_CLASS: Record<SlotSymbolId, string> = {
-  diamond: 'slot-cell-vegas slot-cell-diamond',
-  crown: 'slot-cell-vegas slot-cell-crown',
-  cash: 'slot-cell-vegas slot-cell-cash',
-  jackpot: 'slot-cell-vegas slot-cell-jackpot',
-  dice: 'slot-cell-vegas slot-cell-dice',
-  bell: 'slot-cell-vegas slot-cell-bell',
-  star: 'slot-cell-vegas slot-cell-star',
-  clover: 'slot-cell-vegas slot-cell-clover',
-  cherry: 'slot-cell-vegas slot-cell-cherry',
-  ace: 'slot-cell-vegas slot-cell-ace',
+  cherry: 'bg-gradient-to-br from-rose-500 to-red-900',
+  clover: 'bg-gradient-to-br from-lime-400 to-green-800',
+  bell: 'bg-gradient-to-br from-yellow-300 to-amber-800',
+  cash: 'bg-gradient-to-br from-emerald-400 to-green-900',
+  dice: 'bg-gradient-to-br from-zinc-200 to-zinc-800',
+  ace: 'bg-gradient-to-br from-indigo-300 to-indigo-900',
+  star: 'bg-gradient-to-br from-amber-300 to-orange-700',
+  diamond: 'bg-gradient-to-br from-cyan-400 to-blue-900',
+  crown: 'bg-gradient-to-br from-yellow-200 to-amber-700',
+  jackpot: 'bg-gradient-to-br from-red-400 to-red-950',
 };
