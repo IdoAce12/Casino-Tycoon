@@ -627,18 +627,33 @@ export function SlotSymbolIcon({
   symbol,
   size,
   inferno = false,
+  fill = false,
 }: {
   symbol: SlotSymbolId;
-  size: number;
+  size?: number;
   inferno?: boolean;
+  fill?: boolean;
 }) {
   const Render = RENDERERS[symbol];
   const depth = inferno
     ? 'brightness-[1.4] contrast-[1.25] saturate-[1.5] drop-shadow-[0_0_16px_rgba(255,100,0,0.9)]'
     : 'drop-shadow-[0_5px_8px_rgba(0,0,0,0.75)] drop-shadow-[0_0_12px_rgba(255,255,255,0.06)]';
+
+  if (fill) {
+    return (
+      <div
+        className={`symbol-3d-wrap w-full h-full min-w-0 min-h-0 flex items-center justify-center p-0 transition-all duration-300 ${depth}`}
+      >
+        <div className="w-full h-full flex items-center justify-center [&_svg]:w-full [&_svg]:h-full [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:object-contain">
+          <Render size={48} inferno={inferno} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`symbol-3d-wrap transition-all duration-300 ${depth}`}>
-      <Render size={size} inferno={inferno} />
+      <Render size={size ?? 48} inferno={inferno} />
     </div>
   );
 }

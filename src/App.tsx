@@ -569,7 +569,7 @@ function buildWagerJumps(
 }
 
 function formatPersistentWin(totalPayout: number, bet: number): string {
-  if (totalPayout > 0) return `WIN: ${formatMoney(totalPayout)}! 🔥`;
+  if (totalPayout > 0) return `WIN: ${formatMoney(totalPayout)}!`;
   return `LOSS: ${formatMoney(bet)}`;
 }
 
@@ -982,37 +982,35 @@ function SlotColumn({
                 : 'none',
             }}
           >
-            {anim!.strip.map((sym, idx) => {
-              const iconSize = Math.max(22, Math.min(36, stripCellH * 0.52));
-              return (
-                <div
-                  key={`${columnIndex}-${idx}`}
-                  className="flex items-center justify-center select-none leading-none"
-                  style={{ height: stripCellH }}
-                >
-                  <SlotSymbolIcon symbol={sym} size={iconSize} />
-                </div>
-              );
-            })}
+            {anim!.strip.map((sym, idx) => (
+              <div
+                key={`${columnIndex}-${idx}`}
+                className="flex items-center justify-center w-full select-none leading-none p-0"
+                style={{ height: stripCellH }}
+              >
+                <SlotSymbolIcon symbol={sym} fill />
+              </div>
+            ))}
           </div>
         ) : (
           <div className="flex flex-col gap-0 leading-none">
             {displaySymbols.map((sym, row) => {
               const cellKey = `${row},${columnIndex}`;
               const inferno = burningCells.has(cellKey);
-              const iconSize = Math.max(22, Math.min(36, cellHeight * 0.52));
               return (
                 <div
                   key={`${columnIndex}-${row}`}
-                  className={`flex items-center justify-center select-none relative ${
+                  className={`flex items-center justify-center w-full select-none relative p-0 ${
                     inferno ? 'slot-cell-inferno' : ''
                   }`}
                   style={{ height: cellHeight }}
                 >
                   <div
-                    className={`relative z-[3] ${inferno ? 'animate-inferno-celebrate' : ''}`}
+                    className={`relative z-[3] w-full h-full flex items-center justify-center ${
+                      inferno ? 'animate-inferno-celebrate' : ''
+                    }`}
                   >
-                    <SlotSymbolIcon symbol={sym} size={iconSize} inferno={inferno} />
+                    <SlotSymbolIcon symbol={sym} fill inferno={inferno} />
                   </div>
                 </div>
               );
@@ -1108,7 +1106,7 @@ function SlotMatrix({
         </div>
         <div
           ref={gridRef}
-          className={`relative flex-1 min-h-0 rounded-lg border p-0.5 z-[1] ${cabinet.gridWindow}`}
+          className={`relative flex-1 min-h-0 rounded-lg border p-0 z-[1] ${cabinet.gridWindow}`}
         >
           <div className="flex gap-px justify-center w-full h-full relative">
             {columns.map((colSyms, i) => (
@@ -1358,11 +1356,10 @@ export default function App() {
       wins: SlotWin[],
       celebrateCells: string[],
     ) => {
-      const net = totalPayout - bet;
-      if (net > 0) {
-        feedbackWin(net, bet);
+      if (totalPayout > 0) {
         setPlayerMoney((m) => m + totalPayout);
-      } else if (totalPayout === 0) {
+        feedbackWin(totalPayout, bet);
+      } else {
         feedbackLoss(bet);
       }
       setSlotsState((s) => ({
