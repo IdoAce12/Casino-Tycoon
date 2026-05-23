@@ -17,12 +17,6 @@ interface SlotWin {
   symbol: SlotSymbolId;
 }
 
-interface StageTheme {
-  slotGlow: string;
-  slotFrame: string;
-  title: string;
-}
-
 function cellCenterPct(row: number, col: number): { x: number; y: number } {
   return { x: ((col + 0.5) / SLOT_COLS) * 100, y: ((row + 0.5) / SLOT_ROWS) * 100 };
 }
@@ -30,18 +24,15 @@ function cellCenterPct(row: number, col: number): { x: number; y: number } {
 function PaylineOverlay({
   wins,
   infernoPhase,
-  highlightInferno,
 }: {
   wins: SlotWin[];
   infernoPhase: InfernoPhase;
-  highlightInferno: boolean;
 }) {
   if (wins.length === 0) return null;
-  const infernoActive = highlightInferno && infernoPhase !== 'idle';
 
   return (
     <svg
-      className="absolute inset-0 w-full h-full pointer-events-none z-30"
+      className="absolute inset-0 w-full h-full pointer-events-none z-20"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       aria-hidden
@@ -51,17 +42,16 @@ function PaylineOverlay({
           const { x, y } = cellCenterPct(r, c);
           return `${x},${y}`;
         });
-        const isInfernoLine = win.count >= INFERNO_MIN_MATCH;
         return (
           <polyline
-            key={`line-${win.lineIndex}-${win.count}`}
+            key={`line-${win.lineIndex}`}
             points={pts.join(' ')}
             fill="none"
-            stroke={infernoActive && isInfernoLine ? '#ff9500' : '#fbbf24'}
-            strokeWidth={isInfernoLine ? 2.8 : 2}
+            stroke="#f59e0b"
+            strokeWidth={win.count >= INFERNO_MIN_MATCH ? 2.5 : 1.8}
             strokeLinecap="round"
             strokeLinejoin="round"
-            opacity={infernoPhase === 'idle' ? 0.75 : 1}
+            opacity={infernoPhase === 'idle' ? 0.7 : 1}
             style={{ vectorEffect: 'non-scaling-stroke' } as React.CSSProperties}
           />
         );
@@ -71,7 +61,6 @@ function PaylineOverlay({
 }
 
 export function SlotMatrix({
-  theme,
   stageIndex,
   grid,
   isSpinning,
@@ -83,7 +72,6 @@ export function SlotMatrix({
   onCellHeight,
   onColumnLanded,
 }: {
-  theme: StageTheme;
   stageIndex: number;
   grid: SlotGrid;
   isSpinning: boolean;
@@ -99,7 +87,6 @@ export function SlotMatrix({
   const gridRef = useRef<HTMLDivElement>(null);
   const [cellHeight, setCellHeight] = useState(SLOT_CELL_H);
   const burnSet = new Set(burningCells);
-  const hasInfernoWin = activeWins.some((w) => w.count >= INFERNO_MIN_MATCH);
   const showPaylines = !isSpinning && activeWins.length > 0;
 
   const columns = Array.from({ length: SLOT_COLS }, (_, col) =>
@@ -124,62 +111,48 @@ export function SlotMatrix({
   }, [onCellHeight]);
 
   return (
-    <div className={`relative w-full h-full mx-auto ${theme.slotGlow}`}>
+    <div className="relative w-full h-full flex flex-col rounded-lg border p-1 min-h-0">
       <div
-        className={`relative h-full flex flex-col rounded-lg border-2 p-0.5 ${theme.slotFrame} ${cabinet.shell}`}
+        className={`flex items-center justify-between px-1 py-0.5 shrink-0 rounded-t border-b border-zinc-800 ${cabinet.shell}`}
       >
-        <div className="flex items-center justify-between px-1 py-0.5 shrink-0">
-          <span className={`text-[8px] font-bold tracking-widest uppercase ${cabinet.badge}`}>
-            3×5
-          </span>
-          <div className="flex gap-0.5">
-            {Array.from({ length: SLOT_COLS }, (_, i) => (
-              <div
-                key={i}
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isSpinning && i >= stoppedColumns
-                    ? 'bg-amber-300'
-                    : isSpinning
-                      ? 'bg-emerald-400'
-                      : 'bg-white/30'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-        <div
-          ref={gridRef}
-          className={`relative flex-1 min-h-0 rounded border border-black/50 p-0 ${cabinet.gridWindow}`}
-        >
-          <div className="flex gap-px justify-center w-full h-full">
-            {columns.map((colSyms, i) => (
-              <SlotReelColumn
-                key={i}
-                columnIndex={i}
-                columnSymbols={colSyms}
-                anim={columnAnims?.[i] ?? null}
-                isSpinning={isSpinning}
-                burningCells={burnSet}
-                cellHeight={cellHeight}
-                reelCell={cabinet.reelCell}
-                onColumnLanded={onColumnLanded}
-              />
-            ))}
-          </div>
-          {showPaylines && (
-            <PaylineOverlay
-              wins={activeWins}
-              infernoPhase={infernoPhase}
-              highlightInferno={hasInfernoWin}
+        <span className={`text-[8px] font-bold tracking-widest uppercase ${cabinet.badge}`}>
+          3×5
+        </span>
+        <div className="flex gap-1">
+          {Array.from({ length: SLOT_COLS }, (_, i) => (
+            <div
+              key={i}
+              className={`w-1.5 h-1.5 rounded-full ${
+                isSpinning && i >= stoppedColumns ? 'bg-amber-400' : isSpinning ? 'bg-emerald-500' : 'bg-zinc-600'
+              }`}
             />
-          )}
+          ))}
         </div>
-        <div className="mt-0.5 h-0.5 rounded-full bg-black/60 overflow-hidden shrink-0">
-          <div
-            className={`h-full bg-gradient-to-r ${cabinet.progressBar} transition-[width] ease-out ${isSpinning ? 'w-full' : 'w-0'}`}
-            style={{ transitionDuration: isSpinning ? '1600ms' : '200ms' }}
-          />
+      </div>
+
+      <div ref={gridRef} className={`relative flex-1 min-h-0 ${cabinet.gridWindow}`}>
+        <div className="flex h-full w-full">
+          {columns.map((colSyms, i) => (
+            <SlotReelColumn
+              key={i}
+              columnIndex={i}
+              columnSymbols={colSyms}
+              anim={columnAnims?.[i] ?? null}
+              isSpinning={isSpinning}
+              burningCells={burnSet}
+              cellHeight={cellHeight}
+              onColumnLanded={onColumnLanded}
+            />
+          ))}
         </div>
+        {showPaylines && <PaylineOverlay wins={activeWins} infernoPhase={infernoPhase} />}
+      </div>
+
+      <div className="mt-0.5 h-0.5 rounded-full bg-zinc-800 overflow-hidden shrink-0">
+        <div
+          className={`h-full bg-gradient-to-r ${cabinet.progressBar} transition-[width] ease-out ${isSpinning ? 'w-full' : 'w-0'}`}
+          style={{ transitionDuration: isSpinning ? '1600ms' : '200ms' }}
+        />
       </div>
     </div>
   );

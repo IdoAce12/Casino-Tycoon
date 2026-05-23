@@ -1,5 +1,3 @@
-import { SYMBOL_CELL_CLASS } from './slotSymbolCell';
-
 export type SlotSymbolId =
   | 'cherry'
   | 'clover'
@@ -31,11 +29,11 @@ export const SYMBOL_EMOJI: Record<SlotSymbolId, string> = {
   bell: '🔔',
   cash: '💵',
   dice: '🎲',
-  ace: '🃏',
+  ace: '🦩',
   star: '⭐',
   diamond: '💎',
   crown: '👑',
-  jackpot: '7️⃣',
+  jackpot: '🎰',
 };
 
 export const SLOT_SYMBOL_WEIGHTS: { symbol: SlotSymbolId; weight: number }[] = [
@@ -301,13 +299,11 @@ export function SlotSymbolCell({
   inferno?: boolean;
 }) {
   return (
-    <div
-      className={`w-full h-full flex items-center justify-center border border-black/40 ${SYMBOL_CELL_CLASS[symbol]} ${
-        inferno ? 'ring-2 ring-orange-400 ring-inset' : ''
-      }`}
-    >
+    <div className="w-full h-full flex items-center justify-center p-0 m-0 bg-transparent">
       <span
-        className="block w-full h-full flex items-center justify-center text-[clamp(1.85rem,11vw,3.5rem)] leading-none select-none"
+        className={`block leading-none select-none text-[clamp(2.25rem,13vw,4rem)] ${
+          inferno ? 'scale-110' : ''
+        }`}
         aria-hidden
       >
         {SYMBOL_EMOJI[symbol]}

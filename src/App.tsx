@@ -1729,7 +1729,6 @@ export default function App() {
             >
               <div className="flex-1 min-h-0 flex items-stretch justify-center">
                 <SlotMatrix
-                  theme={theme}
                   stageIndex={currentStage}
                   grid={slotsState.grid}
                   isSpinning={slotsState.isSpinning}

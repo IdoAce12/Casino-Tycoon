@@ -10,7 +10,6 @@ export function SlotReelColumn({
   isSpinning,
   burningCells,
   cellHeight,
-  reelCell,
   onColumnLanded,
 }: {
   columnIndex: number;
@@ -19,7 +18,6 @@ export function SlotReelColumn({
   isSpinning: boolean;
   burningCells: Set<string>;
   cellHeight: number;
-  reelCell: string;
   onColumnLanded: (columnIndex: number) => void;
 }) {
   const [offset, setOffset] = useState(0);
@@ -75,10 +73,7 @@ export function SlotReelColumn({
   }, [activeSpin, columnIndex, onColumnLanded]);
 
   return (
-    <div
-      className={`relative flex-1 min-w-0 overflow-hidden border ${reelCell}`}
-      style={{ height: viewportH }}
-    >
+    <div className="relative flex-1 min-w-0 overflow-hidden" style={{ height: viewportH }}>
       <div className="absolute inset-0 overflow-hidden">
         <div
           ref={stripRef}
@@ -101,11 +96,7 @@ export function SlotReelColumn({
               rowInView >= 0 && burningCells.has(`${rowInView},${columnIndex}`);
 
             return (
-              <div
-                key={`${columnIndex}-${idx}`}
-                className="w-full p-0"
-                style={{ height: stripCellH }}
-              >
+              <div key={`${columnIndex}-${idx}`} className="w-full" style={{ height: stripCellH }}>
                 <SlotSymbolCell symbol={sym} inferno={inferno} />
               </div>
             );
