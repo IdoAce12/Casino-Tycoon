@@ -1,4 +1,4 @@
-/** Minimal cabinet chrome — no per-cell styling, uniform reel backdrop */
+/** Steampunk industrial cabinet — blueprint obsidian shell */
 
 export interface SlotCabinetStyle {
   shell: string;
@@ -7,11 +7,16 @@ export interface SlotCabinetStyle {
   badge: string;
 }
 
-const MINIMAL: SlotCabinetStyle = {
-  shell: 'bg-zinc-900 border-zinc-700',
-  gridWindow: 'bg-slate-950',
-  progressBar: 'from-amber-600 to-amber-500',
-  badge: 'text-zinc-500',
+const STEAMPUNK: SlotCabinetStyle = {
+  shell: 'bg-[#0a0a0c] border-amber-800/40',
+  gridWindow: 'blueprint-reel-window',
+  progressBar: 'from-amber-700 via-amber-500 to-amber-800',
+  badge: 'text-amber-600/90',
 };
 
-export const SLOT_CABINET_BY_STAGE: SlotCabinetStyle[] = [MINIMAL, MINIMAL, MINIMAL, MINIMAL];
+export const SLOT_CABINET_BY_STAGE: SlotCabinetStyle[] = [
+  STEAMPUNK,
+  STEAMPUNK,
+  STEAMPUNK,
+  STEAMPUNK,
+];

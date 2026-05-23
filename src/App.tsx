@@ -12,7 +12,6 @@ import {
   countPaylineMatch,
   paylinePayoutMultiplier,
   SLOT_SYMBOLS,
-  preloadSlotSymbolImages,
   SYMBOL_LABELS,
   type SlotGrid,
   type SlotSymbolId,
@@ -860,7 +859,6 @@ export default function App() {
   const minBet = stage.minBet;
 
   useEffect(() => {
-    preloadSlotSymbolImages();
     const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!link) {
       const m = document.createElement('link');

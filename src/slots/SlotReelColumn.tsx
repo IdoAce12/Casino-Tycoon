@@ -10,6 +10,7 @@ export function SlotReelColumn({
   isSpinning,
   burningCells,
   cellHeight,
+  isLastColumn,
   onColumnLanded,
 }: {
   columnIndex: number;
@@ -18,6 +19,7 @@ export function SlotReelColumn({
   isSpinning: boolean;
   burningCells: Set<string>;
   cellHeight: number;
+  isLastColumn: boolean;
   onColumnLanded: (columnIndex: number) => void;
 }) {
   const [offset, setOffset] = useState(0);
@@ -73,7 +75,12 @@ export function SlotReelColumn({
   }, [activeSpin, columnIndex, onColumnLanded]);
 
   return (
-    <div className="relative flex-1 min-w-0 overflow-hidden" style={{ height: viewportH }}>
+    <div
+      className={`relative flex-1 min-w-0 overflow-hidden ${
+        isLastColumn ? '' : 'border-r border-amber-700/50'
+      }`}
+      style={{ height: viewportH }}
+    >
       <div className="absolute inset-0 overflow-hidden">
         <div
           ref={stripRef}

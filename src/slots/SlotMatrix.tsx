@@ -47,11 +47,11 @@ function PaylineOverlay({
             key={`line-${win.lineIndex}`}
             points={pts.join(' ')}
             fill="none"
-            stroke="#f59e0b"
+            stroke={win.count >= INFERNO_MIN_MATCH ? '#f59e0b' : '#d97706'}
             strokeWidth={win.count >= INFERNO_MIN_MATCH ? 2.5 : 1.8}
             strokeLinecap="round"
             strokeLinejoin="round"
-            opacity={infernoPhase === 'idle' ? 0.7 : 1}
+            opacity={infernoPhase === 'idle' ? 0.75 : 1}
             style={{ vectorEffect: 'non-scaling-stroke' } as React.CSSProperties}
           />
         );
@@ -111,27 +111,28 @@ export function SlotMatrix({
   }, [onCellHeight]);
 
   return (
-    <div className="relative w-full h-full flex flex-col rounded-lg border p-1 min-h-0">
+    <div className="relative w-full h-full flex flex-col rounded-lg border border-amber-900/30 bg-[#0a0a0c] p-1 min-h-0">
       <div
-        className={`flex items-center justify-between px-1 py-0.5 shrink-0 rounded-t border-b border-zinc-800 ${cabinet.shell}`}
+        className={`flex items-center justify-between px-1.5 py-0.5 shrink-0 border-b border-amber-800/30 ${cabinet.shell}`}
       >
-        <span className={`text-[8px] font-bold tracking-widest uppercase ${cabinet.badge}`}>
-          3×5
+        <span className={`text-[8px] font-bold tracking-[0.2em] uppercase ${cabinet.badge}`}>
+          Blueprint · 3×5
         </span>
         <div className="flex gap-1">
           {Array.from({ length: SLOT_COLS }, (_, i) => (
             <div
               key={i}
               className={`w-1.5 h-1.5 rounded-full ${
-                isSpinning && i >= stoppedColumns ? 'bg-amber-400' : isSpinning ? 'bg-emerald-500' : 'bg-zinc-600'
+                isSpinning && i >= stoppedColumns ? 'bg-amber-400' : isSpinning ? 'bg-amber-600' : 'bg-zinc-700'
               }`}
             />
           ))}
         </div>
       </div>
 
-      <div ref={gridRef} className={`relative flex-1 min-h-0 ${cabinet.gridWindow}`}>
-        <div className="flex h-full w-full">
+      <div ref={gridRef} className={`relative flex-1 min-h-0 rounded-sm ${cabinet.gridWindow}`}>
+        <div className="blueprint-schematic-lines absolute inset-0 pointer-events-none opacity-40" aria-hidden />
+        <div className="relative flex h-full w-full z-[1]">
           {columns.map((colSyms, i) => (
             <SlotReelColumn
               key={i}
@@ -141,6 +142,7 @@ export function SlotMatrix({
               isSpinning={isSpinning}
               burningCells={burnSet}
               cellHeight={cellHeight}
+              isLastColumn={i === SLOT_COLS - 1}
               onColumnLanded={onColumnLanded}
             />
           ))}
@@ -148,7 +150,7 @@ export function SlotMatrix({
         {showPaylines && <PaylineOverlay wins={activeWins} infernoPhase={infernoPhase} />}
       </div>
 
-      <div className="mt-0.5 h-0.5 rounded-full bg-zinc-800 overflow-hidden shrink-0">
+      <div className="mt-0.5 h-0.5 rounded-full bg-zinc-900 overflow-hidden shrink-0">
         <div
           className={`h-full bg-gradient-to-r ${cabinet.progressBar} transition-[width] ease-out ${isSpinning ? 'w-full' : 'w-0'}`}
           style={{ transitionDuration: isSpinning ? '1600ms' : '200ms' }}

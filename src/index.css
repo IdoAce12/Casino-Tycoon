@@ -119,6 +119,21 @@ body,
     stroke-linejoin: round;
   }
 
+  .blueprint-reel-window {
+    background-color: #0a0a0c;
+    background-image:
+      linear-gradient(rgba(180, 120, 50, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(180, 120, 50, 0.07) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+
+  .blueprint-schematic-lines {
+    background-image:
+      linear-gradient(rgba(217, 119, 6, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(217, 119, 6, 0.12) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
   .cabinet-flicker-bulbs::before,
   .cabinet-flicker-bulbs::after {
     content: '';
