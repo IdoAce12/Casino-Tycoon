@@ -13,7 +13,7 @@ import {
   paylinePayoutMultiplier,
   randomSlotSymbol,
   SLOT_SYMBOLS,
-  SlotSymbolIcon,
+  SlotSymbolCell,
   SYMBOL_LABELS,
   type SlotGrid,
   type SlotSymbolId,
@@ -967,11 +967,11 @@ function SlotColumn({
       className={`relative flex-1 min-w-0 rounded-sm overflow-hidden border ${reelCell}`}
       style={{ height: viewportH }}
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-black/60 pointer-events-none z-10" />
-      <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-white/10 to-transparent z-10 pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-gold/30 z-20 pointer-events-none" />
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] via-transparent to-black/25 pointer-events-none z-[1]" />
+      <div className="absolute inset-x-0 top-0 h-1/5 bg-gradient-to-b from-white/[0.06] to-transparent z-[1] pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-1/5 bg-gradient-to-t from-black/40 to-transparent z-[1] pointer-events-none" />
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-gold/25 z-[1] pointer-events-none" />
+      <div className="absolute inset-0 overflow-hidden z-[5]">
         {showReelStrip ? (
           <div
             className="reel-strip"
@@ -985,33 +985,25 @@ function SlotColumn({
             {anim!.strip.map((sym, idx) => (
               <div
                 key={`${columnIndex}-${idx}`}
-                className="flex items-center justify-center w-full select-none leading-none p-0"
+                className="w-full select-none leading-none p-0"
                 style={{ height: stripCellH }}
               >
-                <SlotSymbolIcon symbol={sym} fill />
+                <SlotSymbolCell symbol={sym} />
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-0 leading-none">
+          <div className="flex flex-col gap-px leading-none h-full">
             {displaySymbols.map((sym, row) => {
               const cellKey = `${row},${columnIndex}`;
               const inferno = burningCells.has(cellKey);
               return (
                 <div
                   key={`${columnIndex}-${row}`}
-                  className={`flex items-center justify-center w-full select-none relative p-0 ${
-                    inferno ? 'slot-cell-inferno' : ''
-                  }`}
-                  style={{ height: cellHeight }}
+                  className="w-full flex-1 min-h-0 select-none relative p-0"
+                  style={{ minHeight: cellHeight }}
                 >
-                  <div
-                    className={`relative z-[3] w-full h-full flex items-center justify-center ${
-                      inferno ? 'animate-inferno-celebrate' : ''
-                    }`}
-                  >
-                    <SlotSymbolIcon symbol={sym} fill inferno={inferno} />
-                  </div>
+                  <SlotSymbolCell symbol={sym} inferno={inferno} />
                 </div>
               );
             })}

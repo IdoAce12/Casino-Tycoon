@@ -1,4 +1,5 @@
 import { useId, type ReactElement } from 'react';
+import { SYMBOL_CELL_CLASS } from './slotSymbolCell';
 
 export type SlotSymbolId =
   | 'cherry'
@@ -660,4 +661,30 @@ export function SlotSymbolIcon({
 
 export function isSlotSymbolId(value: string): value is SlotSymbolId {
   return (SLOT_SYMBOLS as readonly string[]).includes(value);
+}
+
+/** Full grid cell: persistent Vegas background + scaled 3D symbol; inferno overlays on top */
+export function SlotSymbolCell({
+  symbol,
+  inferno = false,
+}: {
+  symbol: SlotSymbolId;
+  inferno?: boolean;
+}) {
+  return (
+    <div
+      className={`relative w-full h-full min-w-0 min-h-0 overflow-hidden ${SYMBOL_CELL_CLASS[symbol]} ${
+        inferno ? 'slot-cell-inferno z-[8]' : 'z-[2]'
+      }`}
+    >
+      <div className="slot-cell-vegas-shine pointer-events-none" aria-hidden />
+      <div
+        className={`relative z-[3] w-full h-full flex items-center justify-center p-0 ${
+          inferno ? 'animate-inferno-celebrate' : ''
+        }`}
+      >
+        <SlotSymbolIcon symbol={symbol} fill inferno={inferno} />
+      </div>
+    </div>
+  );
 }
